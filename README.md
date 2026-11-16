@@ -76,6 +76,27 @@ The reference adapter still recomputes the read sequence through
 ready, it only needs to implement the five methods in `SigmaBackend`; the
 harness compaction/read gate remains unchanged.
 
+## Validation status
+
+The harness has been exercised end to end with the project's `SigmaV41`
+implementation and its V4.1 tiny architecture fixture:
+
+```text
+first turn:  compacted=False, read_enabled=False
+second turn: compacted=True, read_enabled=True
+```
+
+This confirms the complete writer, compaction, reader-state, and generation
+path. The smoke uses the shared DeepSeek-style encoder as the writer; it does
+not use a Qwen3-0.6B writer.
+
+The full DeepSeek-V4.1 checkpoint has not been run through this new harness
+yet. The TP8 checkpoint is available in the project environment, but the
+server GPUs were occupied by the existing training job during this validation.
+The harness therefore does not claim a real-checkpoint result until that run
+is completed. The original Qwen setup (Qwen3-0.6B writer and Qwen3-4B reader)
+was validated separately in `delta-mem-miles`, outside this harness.
+
 ## Future extensions
 
 - Replace `LogicalKVCache` with a real paged-KV object.

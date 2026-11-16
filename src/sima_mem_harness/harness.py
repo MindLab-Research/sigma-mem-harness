@@ -179,7 +179,7 @@ class SigmaConversationHarness:
             self.context_window_tokens - prompt_tokens - response_budget,
         )
         self.compact()
-        required = len(self.state.native_token_ids) + prompt_tokens + max_new_tokens
+        required = len(self.state.native_token_ids) + prompt_tokens + response_budget
         if required > self.context_window_tokens:
             raise ValueError("compaction could not make room for the incoming prompt")
         return True

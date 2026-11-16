@@ -1,34 +1,45 @@
 # sima-mem-harness
 
-最小的 Σ-mem 多轮对话 harness，用于验证 **compact 之前只使用主模型原生 KV，compact 之后才启用 Σ-mem 读取** 的会话协议。
+A minimal multi-turn conversation harness for the following Sigma-memory
+protocol: **use only the model's native KV cache before compaction, and enable
+Sigma-memory reads only after compaction**.
 
-这个仓库只实现会话编排，不替代 DeepSeek-V4.1 的训练或 serving backend。它复用了项目中的 Σ-mem 核心约定：writer 产生可加的二阶统计量 `H`，compact 时把被淘汰的历史转入可读 memory，reader 由 backend 将 memory 转成模型的 per-layer state。
+This repository provides conversation orchestration. It does not replace the
+DeepSeek-V4.1 training or serving backend. It follows the Sigma-memory design
+used by the project: the writer produces an additive second-moment statistic
+`H`, compacted history is moved into readable memory, and the backend converts
+that memory into the model's per-layer read state.
 
-## 协议
+## Protocol
 
-每个完成的 user/assistant turn 都会写一次 Σ-mem：
+Every completed user/assistant turn is written to Sigma memory:
 
 ```text
 turn -> writer -> written_memory
 ```
 
-在第一次 compact 之前，`written_memory` 只用于写入统计，所有 backend 调用都收到 `read_state=None`：
+Before the first compact, `written_memory` is write-only. Every backend call
+receives `read_state=None`:
 
 ```text
 recent conversation -> native KV -> model
-history            -> Sigma writer only
+history             -> Sigma writer only
 ```
 
-当新问题加上预计回答长度将超过 native context window 时，harness 会：
+When a new prompt plus its expected response would exceed the native context
+window, the harness:
 
-1. 从最老的 turn 开始淘汰，保留最近的 token tail；
-2. 把淘汰 turn 的 memory 加到 `readable_memory`；
-3. 重建 native KV tail；
-4. 从这一刻开始给 backend 传 `read_state`，主模型才读取 Σ-mem。
+1. Evicts the oldest complete conversation turns while retaining a recent
+   token tail.
+2. Adds the evicted turns to `readable_memory`.
+3. Rebuilds the native KV cache for the retained tail.
+4. Starts passing `read_state` to the backend, enabling Sigma-memory reads.
 
-compact 后新完成的 turn 也会写入 Σ-mem，并在下一轮读取。`written_memory` 与 `readable_memory` 分开，避免保留在 native KV 中的近期 turn 被重复读入。
+Turns completed after compaction are also written to Sigma memory and become
+readable on the next turn. `written_memory` and `readable_memory` are kept
+separate so recent turns still present in native KV are not read twice.
 
-## 本地运行
+## Local usage
 
 ```bash
 python -m pip install -e '.[test]'
@@ -36,11 +47,15 @@ pytest -q
 python -m sima_mem_harness.smoke
 ```
 
-`TraceBackend` 是一个确定性的协议测试 backend。它不假装实现真实 KV，只记录每次 append/rebuild/generate 是否收到 Sigma read state。
+`TraceBackend` is a deterministic protocol-test backend. It does not pretend
+to implement real KV caching; it records whether each append, rebuild, and
+generation call received a Sigma read state.
 
-## 接入当前 DeepSeek-V4.1 实现
+## Connecting the current DeepSeek-V4.1 implementation
 
-当前项目的 `delta_mem_miles/sigma/dpsk-v4.1` 仍是参考生成路径，尚未暴露增量 paged KV。`SigmaV41ReferenceBackend` 可以直接包住已经构造好的 `SigmaV41` 实例：
+The current `delta_mem_miles/sigma/dpsk-v4.1` implementation is still a
+reference generation path and does not expose incremental paged KV yet.
+`SigmaV41ReferenceBackend` can wrap an already-constructed `SigmaV41` model:
 
 ```python
 from sima_mem_harness import SigmaConversationHarness
@@ -56,11 +71,15 @@ harness = SigmaConversationHarness(
 answer_ids = harness.run_turn(question_ids, max_new_tokens=512).token_ids
 ```
 
-这个 reference adapter 仍由 `SigmaV41.generate` 重算 read 序列；后续接入真正的 vLLM/SGLang/DeepSeek paged-KV backend 时，只需实现 `SigmaBackend` 的五个方法，harness 的 compact/read gate 不变。
+The reference adapter still recomputes the read sequence through
+`SigmaV41.generate`. When a real vLLM, SGLang, or DeepSeek paged-KV backend is
+ready, it only needs to implement the five methods in `SigmaBackend`; the
+harness compaction/read gate remains unchanged.
 
-## 后续扩展
+## Future extensions
 
-- 用实际 paged KV 对象替换 `LogicalKVCache`；
-- compact 时接入当前模型的历史 token eviction 和 block manager；
-- 在 `prepare_read_state` 中缓存每层 `S_l`，避免每个 decode step 重复求解；
-- 加入 full-history、no-memory 和 compact-memory 三种对照评测。
+- Replace `LogicalKVCache` with a real paged-KV object.
+- Connect compaction to the model's token eviction and block manager.
+- Cache each layer's `S_l` in `prepare_read_state` to avoid repeated solves
+  during decoding.
+- Add full-history, no-memory, and compact-memory comparison evaluations.

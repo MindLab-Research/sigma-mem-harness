@@ -26,7 +26,7 @@ def test_compact_moves_old_turns_to_sigma_and_enables_reads():
     assert result.compacted is True
     assert result.read_enabled is True
     assert harness.state.compact_count == 1
-    assert harness.sigma_written_tokens > harness.sigma_readable_tokens > 0
+    assert harness.sigma_written_tokens >= harness.sigma_readable_tokens > 0
     assert any(call.operation == "generate" and call.read_enabled for call in backend.calls)
     assert any(turn.in_native_cache for turn in harness.turns)
     assert any(not turn.in_native_cache for turn in harness.turns)

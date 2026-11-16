@@ -219,19 +219,23 @@ class SigmaConversationHarness:
         self.state.native_token_ids += generated
         self._record_event("generate")
 
-        for role, token_ids in (("user", prompt), ("assistant", generated)):
-            part = self.backend.write_memory(token_ids)
-            turn = ConversationTurn(
-                role=role,
-                token_ids=token_ids,
-                memory=part,
-                in_native_cache=True,
-                readable=self.state.read_enabled,
-            )
-            self.state.turns.append(turn)
-            self._add_written(part)
-            if self.state.read_enabled:
-                self._add_readable(part)
+        # Keep a complete user/assistant exchange as one eviction unit. The
+        # two messages are still encoded independently, matching the writer's
+        # per-message/window contract, then combined additively.
+        user_memory = self.backend.write_memory(prompt)
+        assistant_memory = self.backend.write_memory(generated)
+        turn_memory = user_memory.add(assistant_memory)
+        turn = ConversationTurn(
+            role="turn",
+            token_ids=prompt + generated,
+            memory=turn_memory,
+            in_native_cache=True,
+            readable=self.state.read_enabled,
+        )
+        self.state.turns.append(turn)
+        self._add_written(turn_memory)
+        if self.state.read_enabled:
+            self._add_readable(turn_memory)
 
         # New writes become readable on the next turn. Rebuilding here keeps
         # the cache/read-state contract explicit for a real backend; the toy

@@ -1,3 +1,5 @@
+import pytest
+
 from sima_mem_harness import SigmaConversationHarness
 from sima_mem_harness.toy import TraceBackend
 
@@ -45,6 +47,46 @@ def test_post_compact_turns_are_written_and_read_on_the_next_turn():
     assert harness.state.read_enabled is True
     assert backend.calls[-1].operation == "rebuild_native"
     assert backend.calls[-1].read_enabled is True
+
+
+def test_compact_commits_segments_and_reader_snapshot_atomically():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(backend, context_window_tokens=7, compact_target_tokens=5)
+
+    harness.run_turn([1, 2, 3], max_new_tokens=1)
+    result = harness.run_turn([4, 5, 6], max_new_tokens=1)
+
+    assert result.memory_version == 2
+    assert [segment.segment_id for segment in harness.state.memory_segments] == [
+        "turn-000001",
+        "turn-000002",
+    ]
+    assert [segment.segment_id for segment in harness.state.readable_segments] == [
+        "turn-000001",
+        "turn-000002",
+    ]
+    assert harness.state.reader_snapshot is not None
+    assert harness.state.reader_snapshot.memory_version == harness.state.memory_version
+    assert harness.state.reader_snapshot.segment_ids == ("turn-000001", "turn-000002")
+    assert backend.prepare_calls == 2
+
+
+def test_compact_failure_keeps_native_state_and_read_gate_unchanged():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(backend, context_window_tokens=7, compact_target_tokens=5)
+    harness.run_turn([1, 2, 3], max_new_tokens=1)
+    previous_cache = harness.state.native_cache
+    backend.fail_next_prepare = True
+
+    with pytest.raises(RuntimeError, match="injected reader-state"):
+        harness.run_turn([4, 5, 6], max_new_tokens=1)
+
+    assert harness.state.compact_count == 0
+    assert harness.state.read_enabled is False
+    assert harness.state.memory_version == 0
+    assert harness.state.native_cache == previous_cache
+    assert len(harness.turns) == 1
+    assert harness.turns[0].in_native_cache is True
 
 
 def test_prompt_that_cannot_fit_is_rejected_before_model_calls():

@@ -39,6 +39,12 @@ Turns completed after compaction are also written to Sigma memory and become
 readable on the next turn. `written_memory` and `readable_memory` are kept
 separate so recent turns still present in native KV are not read twice.
 
+The session state now keeps complete-turn `MemorySegment` objects, a
+`memory_version`, and an immutable `ReaderSnapshot`. Reader states are reused
+while the readable memory version is unchanged. Compaction prepares the new
+reader state and rebuilt native cache before committing any eviction, so a
+failed solve or rebuild leaves the previous KV and read gate intact.
+
 ## Local usage
 
 ```bash

@@ -25,6 +25,8 @@ class TraceBackend:
         self.dim = dim
         self.vocab_size = vocab_size
         self.calls: list[TraceCall] = []
+        self.prepare_calls = 0
+        self.fail_next_prepare = False
 
     def write_memory(self, token_ids: Sequence[int]) -> SigmaMemory:
         ids = tuple(int(token) for token in token_ids)
@@ -34,6 +36,10 @@ class TraceBackend:
         return SigmaMemory.from_features(features)
 
     def prepare_read_state(self, memory: SigmaMemory) -> Any:
+        self.prepare_calls += 1
+        if self.fail_next_prepare:
+            self.fail_next_prepare = False
+            raise RuntimeError("injected reader-state preparation failure")
         return memory
 
     def append_native(self, cache, token_ids, *, read_state):

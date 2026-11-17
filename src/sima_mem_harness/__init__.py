@@ -14,6 +14,8 @@ from .harness import (
     GenerationResult,
     HarnessEvent,
     HarnessState,
+    MemorySegment,
+    ReaderSnapshot,
     SigmaConversationHarness,
 )
 from .memory import SigmaMemory
@@ -24,6 +26,8 @@ __all__ = [
     "HarnessEvent",
     "HarnessState",
     "LogicalKVCache",
+    "MemorySegment",
+    "ReaderSnapshot",
     "SigmaBackend",
     "SigmaConversationHarness",
     "SigmaMemory",

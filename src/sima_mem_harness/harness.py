@@ -3,17 +3,40 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Literal, Mapping, Sequence
 
 from .backend import SigmaBackend
 from .memory import SigmaMemory
+
+MemoryWriteMode = Literal["turn", "token_interval", "segment"]
+
+
+@dataclass(frozen=True)
+class MemoryWriteConfig:
+    """When completed conversation tokens become Sigma-memory writes."""
+
+    mode: MemoryWriteMode = "turn"
+    token_interval_tokens: int | None = None
+    segment_capacity_tokens: int | None = None
+
+    def validate(self) -> None:
+        if self.mode not in ("turn", "token_interval", "segment"):
+            raise ValueError("mode must be turn, token_interval, or segment")
+        if self.mode == "token_interval" and (
+            self.token_interval_tokens is None or self.token_interval_tokens < 1
+        ):
+            raise ValueError("token_interval_tokens must be positive in token_interval mode")
+        if self.mode == "segment" and (
+            self.segment_capacity_tokens is None or self.segment_capacity_tokens < 1
+        ):
+            raise ValueError("segment_capacity_tokens must be positive in segment mode")
 
 
 @dataclass
 class ConversationTurn:
     role: str
     token_ids: tuple[int, ...]
-    memory: SigmaMemory
+    memory: SigmaMemory | None
     segment_id: str = ""
     in_native_cache: bool = True
     readable: bool = False
@@ -75,18 +98,19 @@ class HarnessState:
     memory_version: int = 0
     compact_count: int = 0
     read_enabled: bool = False
+    pending_turn_ids: list[str] = field(default_factory=list)
+    pending_turn_tokens: dict[str, tuple[int, ...]] = field(default_factory=dict)
 
 
 class SigmaConversationHarness:
     """Use native KV until compaction, then enable Sigma reads.
 
     ``context_window_tokens`` is the native KV budget. ``compact_target_tokens``
-    is the desired size of the recent native tail after a compact. Every
-    completed turn is written exactly once. Before the first compact it only
-    contributes to ``written_memory``; all backend calls receive
-    ``read_state=None``. After compact, newly completed turns are added to
-    ``readable_memory`` and the backend receives a fresh read state on the next
-    turn.
+    is the desired size of the recent native tail after a compact. The
+    ``MemoryWriteConfig`` controls whether a turn is written at turn end, in
+    generated-token intervals, or after a segment buffer reaches capacity.
+    Before the first compact all writes contribute only to ``written_memory``;
+    every backend call receives ``read_state=None``.
     """
 
     def __init__(
@@ -96,6 +120,7 @@ class SigmaConversationHarness:
         context_window_tokens: int,
         compact_target_tokens: int | None = None,
         reserve_tokens: int = 0,
+        write_config: MemoryWriteConfig | None = None,
     ) -> None:
         if context_window_tokens < 1:
             raise ValueError("context_window_tokens must be positive")
@@ -110,6 +135,8 @@ class SigmaConversationHarness:
         self.context_window_tokens = context_window_tokens
         self.compact_target_tokens = target
         self.reserve_tokens = reserve_tokens
+        self.write_config = write_config or MemoryWriteConfig()
+        self.write_config.validate()
         self.state = HarnessState()
         self.events: list[HarnessEvent] = []
 
@@ -127,11 +154,101 @@ class SigmaConversationHarness:
         memory = self.state.readable_memory
         return 0.0 if memory is None else float(memory.count.item())
 
+    @property
+    def pending_segment_tokens(self) -> int:
+        return sum(len(self.state.pending_turn_tokens[turn_id]) for turn_id in self.state.pending_turn_ids)
+
     def _add_written(self, part: SigmaMemory) -> None:
         if self.state.written_memory is None:
             self.state.written_memory = part
         else:
             self.state.written_memory = self.state.written_memory.add(part)
+
+    def _next_segment_id(self) -> str:
+        return f"turn-{len(self.state.turns) + 1:06d}"
+
+    def _materialize_turn(
+        self,
+        token_ids: tuple[int, ...],
+        memory: SigmaMemory,
+        *,
+        segment_id: str | None = None,
+    ) -> ConversationTurn:
+        segment_id = segment_id or self._next_segment_id()
+        turn_index = len(self.state.turns) + 1
+        segment = MemorySegment(
+            segment_id=segment_id,
+            turn_index=turn_index,
+            token_count=len(token_ids),
+            memory=memory,
+            metadata={"kind": "conversation_turn"},
+        )
+        turn = ConversationTurn(
+            role="turn",
+            token_ids=token_ids,
+            memory=memory,
+            segment_id=segment_id,
+            in_native_cache=True,
+            readable=self.state.read_enabled,
+        )
+        self.state.turns.append(turn)
+        self.state.memory_segments.append(segment)
+        self.state.write_version += 1
+        if self.state.read_enabled:
+            self.state.readable_segments.append(segment)
+            self.state.readable_memory = self._sum_segments(self.state.readable_segments)
+            self.state.memory_version += 1
+        return turn
+
+    def _queue_segment_turn(self, token_ids: tuple[int, ...]) -> None:
+        segment_id = self._next_segment_id()
+        turn = ConversationTurn(
+            role="turn",
+            token_ids=token_ids,
+            memory=None,
+            segment_id=segment_id,
+            in_native_cache=True,
+            readable=False,
+        )
+        self.state.turns.append(turn)
+        self.state.pending_turn_ids.append(segment_id)
+        self.state.pending_turn_tokens[segment_id] = token_ids
+
+    def flush_pending_memory(self, *, rebuild: bool = True) -> int:
+        """Write all buffered segment-mode turns and return their count."""
+
+        if self.write_config.mode != "segment" or not self.state.pending_turn_ids:
+            return 0
+        pending = list(self.state.pending_turn_ids)
+        for segment_id in pending:
+            token_ids = self.state.pending_turn_tokens[segment_id]
+            memory = self.backend.write_memory(token_ids)
+            self._add_written(memory)
+            self._materialize_existing_pending_turn(segment_id, memory)
+        self.state.pending_turn_ids.clear()
+        self.state.pending_turn_tokens.clear()
+        if rebuild and self.state.read_enabled:
+            self._rebuild_native()
+        return len(pending)
+
+    def _materialize_existing_pending_turn(self, segment_id: str, memory: SigmaMemory) -> None:
+        turn = next(turn for turn in self.state.turns if turn.segment_id == segment_id)
+        turn.memory = memory
+        turn.readable = self.state.read_enabled
+        turn_index = self.state.turns.index(turn) + 1
+        segment = MemorySegment(
+            segment_id=segment_id,
+            turn_index=turn_index,
+            token_count=len(turn.token_ids),
+            memory=memory,
+            metadata={"kind": "conversation_turn"},
+        )
+        self.state.memory_segments.append(segment)
+        self.state.write_version += 1
+        if self.state.read_enabled:
+            self.state.readable_segments.append(segment)
+            self.state.readable_memory = self._sum_segments(self.state.readable_segments)
+            self.state.memory_version += 1
 
     @staticmethod
     def _sum_segments(segments: Sequence[MemorySegment]) -> SigmaMemory | None:
@@ -185,6 +302,10 @@ class SigmaConversationHarness:
 
     def compact(self) -> None:
         """Retire the oldest native turns and enable Sigma reads."""
+
+        # A segment-mode buffer cannot be compacted until its raw turns have a
+        # durable Sigma representation. This is the forced-write boundary.
+        self.flush_pending_memory(rebuild=False)
 
         native = [turn for turn in self.state.turns if turn.in_native_cache]
         native_tokens = sum(len(turn.token_ids) for turn in native)
@@ -267,6 +388,7 @@ class SigmaConversationHarness:
         *,
         max_new_tokens: int = 32,
         eos_token_id: int | None = None,
+        end_of_dialogue: bool = False,
     ) -> GenerationResult:
         """Run one user/assistant turn under the delayed-read policy."""
 
@@ -284,6 +406,33 @@ class SigmaConversationHarness:
         self.state.native_token_ids += prompt
         self._record_event("append_user")
 
+        mode = self.write_config.mode
+        observed_generated: list[int] = []
+        interval_buffer: list[int] = []
+        written_parts: list[SigmaMemory] = []
+        user_memory: SigmaMemory | None = None
+
+        def write_interval_chunk(tokens: Sequence[int]) -> None:
+            part = self.backend.write_memory(tokens)
+            self._add_written(part)
+            written_parts.append(part)
+
+        def on_token_chunk(tokens: Sequence[int]) -> None:
+            observed_generated.extend(int(token) for token in tokens)
+            interval_buffer.extend(int(token) for token in tokens)
+            interval = self.write_config.token_interval_tokens
+            if interval is None:
+                return
+            while len(interval_buffer) >= interval:
+                chunk = tuple(interval_buffer[:interval])
+                del interval_buffer[:interval]
+                write_interval_chunk(chunk)
+
+        if mode == "token_interval":
+            user_memory = self.backend.write_memory(prompt)
+            self._add_written(user_memory)
+
+        callback: Callable[[Sequence[int]], None] | None = on_token_chunk if mode == "token_interval" else None
         generated = tuple(
             int(token)
             for token in self.backend.generate(
@@ -291,42 +440,45 @@ class SigmaConversationHarness:
                 read_state=self.state.read_state,
                 max_new_tokens=max_new_tokens,
                 eos_token_id=eos_token_id,
+                on_token_chunk=callback,
             )
         )
+        if mode == "token_interval":
+            # Reference backends may not stream yet. Process any suffix that
+            # was returned without a callback, preserving the same schedule.
+            if len(observed_generated) < len(generated):
+                on_token_chunk(generated[len(observed_generated) :])
+            if tuple(observed_generated) != generated:
+                raise RuntimeError("backend token callback did not match generated output")
+            if interval_buffer:
+                write_interval_chunk(tuple(interval_buffer))
+                interval_buffer.clear()
         self.state.native_token_ids += generated
         self._record_event("generate")
 
-        # Keep a complete user/assistant exchange as one eviction unit. The
-        # two messages are still encoded independently, matching the writer's
-        # per-message/window contract, then combined additively.
-        user_memory = self.backend.write_memory(prompt)
-        assistant_memory = self.backend.write_memory(generated)
-        turn_memory = user_memory.add(assistant_memory)
-        turn_index = len(self.state.turns) + 1
-        segment_id = f"turn-{turn_index:06d}"
-        segment = MemorySegment(
-            segment_id=segment_id,
-            turn_index=turn_index,
-            token_count=len(prompt) + len(generated),
-            memory=turn_memory,
-            metadata={"kind": "conversation_turn"},
-        )
-        turn = ConversationTurn(
-            role="turn",
-            token_ids=prompt + generated,
-            memory=turn_memory,
-            segment_id=segment_id,
-            in_native_cache=True,
-            readable=self.state.read_enabled,
-        )
-        self.state.turns.append(turn)
-        self.state.memory_segments.append(segment)
-        self.state.write_version += 1
-        self._add_written(turn_memory)
-        if self.state.read_enabled:
-            self.state.readable_segments.append(segment)
-            self.state.readable_memory = self._sum_segments(self.state.readable_segments)
-            self.state.memory_version += 1
+        full_turn_tokens = prompt + generated
+        if mode == "turn":
+            # Keep a complete user/assistant exchange as one eviction unit.
+            user_memory = self.backend.write_memory(prompt)
+            assistant_memory = self.backend.write_memory(generated)
+            self._add_written(user_memory)
+            self._add_written(assistant_memory)
+            self._materialize_turn(full_turn_tokens, user_memory.add(assistant_memory))
+        elif mode == "token_interval":
+            turn_memory = user_memory
+            for part in written_parts:
+                turn_memory = part if turn_memory is None else turn_memory.add(part)
+            if turn_memory is None:
+                turn_memory = self.backend.write_memory(())
+                self._add_written(turn_memory)
+            self._materialize_turn(full_turn_tokens, turn_memory)
+        else:
+            self._queue_segment_turn(full_turn_tokens)
+            if self.pending_segment_tokens >= (self.write_config.segment_capacity_tokens or 0):
+                self.flush_pending_memory(rebuild=False)
+
+        if end_of_dialogue:
+            self.finish()
 
         # New writes become readable on the next turn. Rebuilding here keeps
         # the cache/read-state contract explicit for a real backend; the toy
@@ -342,6 +494,12 @@ class SigmaConversationHarness:
             memory_version=self.state.memory_version,
         )
 
+    def finish(self) -> None:
+        """Force the configured mode to flush any buffered dialogue memory."""
+
+        if self.write_config.mode == "segment":
+            self.flush_pending_memory(rebuild=self.state.read_enabled)
+
 
 __all__ = [
     "ConversationTurn",
@@ -349,6 +507,8 @@ __all__ = [
     "HarnessEvent",
     "HarnessState",
     "MemorySegment",
+    "MemoryWriteConfig",
+    "MemoryWriteMode",
     "ReaderSnapshot",
     "SigmaConversationHarness",
 ]

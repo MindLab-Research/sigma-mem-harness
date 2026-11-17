@@ -15,6 +15,8 @@ from .harness import (
     HarnessEvent,
     HarnessState,
     MemorySegment,
+    MemoryWriteConfig,
+    MemoryWriteMode,
     ReaderSnapshot,
     SigmaConversationHarness,
 )
@@ -27,6 +29,8 @@ __all__ = [
     "HarnessState",
     "LogicalKVCache",
     "MemorySegment",
+    "MemoryWriteConfig",
+    "MemoryWriteMode",
     "ReaderSnapshot",
     "SigmaBackend",
     "SigmaConversationHarness",

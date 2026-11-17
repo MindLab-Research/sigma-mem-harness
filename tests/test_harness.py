@@ -1,6 +1,6 @@
 import pytest
 
-from sima_mem_harness import SigmaConversationHarness
+from sima_mem_harness import MemoryWriteConfig, SigmaConversationHarness
 from sima_mem_harness.toy import TraceBackend
 
 
@@ -99,3 +99,58 @@ def test_prompt_that_cannot_fit_is_rejected_before_model_calls():
     else:
         raise AssertionError("oversized prompt should be rejected")
     assert backend.calls == []
+
+
+def test_token_interval_mode_writes_during_generation_and_forces_remainder():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(
+        backend,
+        context_window_tokens=64,
+        write_config=MemoryWriteConfig(mode="token_interval", token_interval_tokens=2),
+    )
+
+    result = harness.run_turn([1, 2], max_new_tokens=5, end_of_dialogue=True)
+
+    assert result.compacted is False
+    assert harness.sigma_readable_tokens == 0
+    assert backend.write_calls == [(1, 2), (900, 901), (902, 903), (904,)]
+    assert harness.sigma_written_tokens == 7
+    assert all(not call.read_enabled for call in backend.calls)
+
+
+def test_segment_mode_buffers_turns_until_capacity_then_flushes():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(
+        backend,
+        context_window_tokens=64,
+        write_config=MemoryWriteConfig(mode="segment", segment_capacity_tokens=6),
+    )
+
+    harness.run_turn([1, 2], max_new_tokens=1)
+    assert backend.write_calls == []
+    assert harness.pending_segment_tokens == 3
+    harness.run_turn([3, 4], max_new_tokens=1)
+
+    assert harness.pending_segment_tokens == 0
+    assert len(backend.write_calls) == 2
+    assert harness.sigma_written_tokens == 6
+    assert harness.sigma_readable_tokens == 0
+
+
+def test_segment_mode_forces_pending_writes_before_compact():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(
+        backend,
+        context_window_tokens=7,
+        compact_target_tokens=5,
+        write_config=MemoryWriteConfig(mode="segment", segment_capacity_tokens=100),
+    )
+
+    harness.run_turn([1, 2, 3], max_new_tokens=1)
+    assert backend.write_calls == []
+    result = harness.run_turn([4, 5, 6], max_new_tokens=1)
+
+    assert result.compacted is True
+    assert result.read_enabled is True
+    assert len(backend.write_calls) == 1
+    assert harness.sigma_readable_tokens == 4

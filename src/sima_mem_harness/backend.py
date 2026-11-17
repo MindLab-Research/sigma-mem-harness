@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol, Sequence
+from typing import Any, Callable, Protocol, Sequence
 
 from .memory import SigmaMemory
 
@@ -43,8 +43,9 @@ class SigmaBackend(Protocol):
         read_state: Any | None,
         max_new_tokens: int,
         eos_token_id: int | None,
+        on_token_chunk: Callable[[Sequence[int]], None] | None = None,
     ) -> Sequence[int]:
-        """Generate from native KV and optional Sigma read state."""
+        """Generate from native KV and optionally stream generated chunks."""
 
 
 __all__ = ["LogicalKVCache", "SigmaBackend"]

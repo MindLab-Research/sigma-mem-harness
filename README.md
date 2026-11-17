@@ -12,7 +12,8 @@ that memory into the model's per-layer read state.
 
 ## Protocol
 
-Every completed user/assistant turn is written to Sigma memory:
+User/assistant history is written to Sigma memory according to the configured
+write schedule:
 
 ```text
 turn -> writer -> written_memory
@@ -44,6 +45,37 @@ The session state now keeps complete-turn `MemorySegment` objects, a
 while the readable memory version is unchanged. Compaction prepares the new
 reader state and rebuilt native cache before committing any eviction, so a
 failed solve or rebuild leaves the previous KV and read gate intact.
+
+## Write timing modes
+
+The write schedule is configurable through `MemoryWriteConfig`:
+
+```python
+from sima_mem_harness import MemoryWriteConfig, SigmaConversationHarness
+
+# Existing behavior: write user and assistant after every completed turn.
+turn_end = MemoryWriteConfig(mode="turn")
+
+# Write assistant prefixes every 128 generated tokens, then flush the remainder.
+token_interval = MemoryWriteConfig(mode="token_interval", token_interval_tokens=128)
+
+# Buffer completed turns until their combined token count reaches 4096.
+segment_buffer = MemoryWriteConfig(mode="segment", segment_capacity_tokens=4096)
+
+harness = SigmaConversationHarness(
+    backend,
+    context_window_tokens=8192,
+    write_config=token_interval,
+)
+```
+
+All three modes keep the same read gate: memory written before the first
+compact remains write-only. `token_interval` requires a backend that invokes
+`on_token_chunk` during decoding for true mid-generation writes; the reference
+DeepSeek adapter currently invokes that callback after its non-streaming
+reference generation completes. `segment` mode flushes its pending turns when
+the configured capacity is reached, when `finish()` is called, or immediately
+before compact.
 
 ## Local usage
 
@@ -110,3 +142,6 @@ was validated separately in `delta-mem-miles`, outside this harness.
 - Cache each layer's `S_l` in `prepare_read_state` to avoid repeated solves
   during decoding.
 - Add full-history, no-memory, and compact-memory comparison evaluations.
+
+See [EVALUATION.md](EVALUATION.md) for the harness comparison protocol,
+quality suites, system metrics, and long-context matrix.

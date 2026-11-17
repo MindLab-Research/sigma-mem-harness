@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import torch
 
@@ -25,11 +25,13 @@ class TraceBackend:
         self.dim = dim
         self.vocab_size = vocab_size
         self.calls: list[TraceCall] = []
+        self.write_calls: list[tuple[int, ...]] = []
         self.prepare_calls = 0
         self.fail_next_prepare = False
 
     def write_memory(self, token_ids: Sequence[int]) -> SigmaMemory:
         ids = tuple(int(token) for token in token_ids)
+        self.write_calls.append(ids)
         features = torch.zeros(len(ids), self.dim)
         for row, token in enumerate(ids):
             features[row, token % self.dim] = 1.0
@@ -53,10 +55,13 @@ class TraceBackend:
         self.calls.append(TraceCall("rebuild_native", ids, read_state is not None))
         return LogicalKVCache(ids)
 
-    def generate(self, cache, *, read_state, max_new_tokens, eos_token_id):
+    def generate(self, cache, *, read_state, max_new_tokens, eos_token_id, on_token_chunk: Callable | None = None):
         self.calls.append(TraceCall("generate", cache.token_ids, read_state is not None))
-        count = min(max_new_tokens, 1)
-        return tuple((900 + i) % self.vocab_size for i in range(count))
+        output = tuple((900 + i) % self.vocab_size for i in range(max_new_tokens))
+        if on_token_chunk is not None and output:
+            for token in output:
+                on_token_chunk((token,))
+        return output
 
 
 __all__ = ["TraceBackend", "TraceCall"]

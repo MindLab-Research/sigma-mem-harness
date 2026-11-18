@@ -125,15 +125,31 @@ second turn: compacted=True, read_enabled=True
 ```
 
 This confirms the complete writer, compaction, reader-state, and generation
-path. The smoke uses the shared DeepSeek-style encoder as the writer; it does
-not use a Qwen3-0.6B writer.
+path. The fixture smoke uses the shared DeepSeek-style encoder as the writer.
 
-The full DeepSeek-V4.1 checkpoint has not been run through this new harness
-yet. The TP8 checkpoint is available in the project environment, but the
-server GPUs were occupied by the existing training job during this validation.
-The harness therefore does not claim a real-checkpoint result until that run
-is completed. The original Qwen setup (Qwen3-0.6B writer and Qwen3-4B reader)
-was validated separately in `delta-mem-miles`, outside this harness.
+The original Qwen SGLang path has also been run through this harness with the
+trained checkpoint at
+`qwen3-4b-mix3wh32_sigma_succ0_r64_rr02_lag0_scu_aoffni_gate64/model/iter_0010455`.
+The reader is the standard Qwen3-4B-compatible base (`hidden_size=2560`), and
+the writer is Qwen3-0.6B with the saved SigmaWriter state. All three write
+schedules completed the same multi-turn protocol:
+
+```text
+turn 1: compacted=False, read_enabled=False
+turn 2: compacted=True,  read_enabled=True
+turn 3: compacted=True,  read_enabled=True
+compact_count=2
+```
+
+The similarly named checkpoint whose directory ends in `_d8b_` has adapter
+matrices with `hidden_size=4096`; that checkpoint requires a Qwen3-8B-compatible
+reader and is a different artifact. It must not be paired with the Qwen3-4B
+base.
+
+The real-checkpoint smoke used Triton attention because the local FlashInfer
+installation has an ABI mismatch. The backend still keeps the native KV cache
+logical, so this validates the memory protocol and schedules rather than
+serving-side paged-KV latency.
 
 ## Original Qwen SGLang backend
 

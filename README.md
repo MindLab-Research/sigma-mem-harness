@@ -135,6 +135,20 @@ The harness therefore does not claim a real-checkpoint result until that run
 is completed. The original Qwen setup (Qwen3-0.6B writer and Qwen3-4B reader)
 was validated separately in `delta-mem-miles`, outside this harness.
 
+## Original Qwen SGLang backend
+
+`QwenSGLangBackend` connects the harness to the original delta-mem SGLang
+control plane. It writes H with the original `SigmaWriter`, arms the served
+reader with `engine.delta_set_sigma_memory(...)`, and sends read requests with
+the original per-session `dmr-<session>` IDs. This backend is intended for
+testing real trained Qwen adapters and the harness write schedules; it keeps a
+logical native cache until a serving-side KV object is wired in.
+
+The backend requires the delta-mem SGLang environment and a model whose
+adapter shapes match the checkpoint. The original reference writer settings
+(`layer=19`, `weight=surprisal`, trained gate state, and the saved writer
+state) must be used when the adapter was trained with those settings.
+
 ## Future extensions
 
 - Replace `LogicalKVCache` with a real paged-KV object.

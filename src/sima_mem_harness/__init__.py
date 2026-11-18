@@ -21,6 +21,7 @@ from .harness import (
     SigmaConversationHarness,
 )
 from .memory import SigmaMemory
+from .qwen_sglang import QwenSGLangBackend, QwenSGLangReadState
 
 __all__ = [
     "ConversationTurn",
@@ -32,6 +33,8 @@ __all__ = [
     "MemoryWriteConfig",
     "MemoryWriteMode",
     "ReaderSnapshot",
+    "QwenSGLangBackend",
+    "QwenSGLangReadState",
     "SigmaBackend",
     "SigmaConversationHarness",
     "SigmaMemory",

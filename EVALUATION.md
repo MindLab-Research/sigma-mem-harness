@@ -5,6 +5,60 @@ recent, position-sensitive context and Sigma memory for compacted history. A
 single final F1 number is not enough because a policy can improve recall while
 adding unacceptable write or compaction latency.
 
+## Minimal integration gates
+
+Run both cases with the same reader checkpoint, tokenizer, decoding settings,
+and one harness write schedule at a time. Then repeat them for `turn`,
+`token_interval`, and `segment` to verify that the schedule does not change the
+first-compact read gate.
+
+### Case A: pre-compact write-only
+
+Use a native context budget large enough that two short turns cannot trigger a
+compact. The first turn can state a synthetic fact, for example:
+
+```text
+Remember that the project code is ALPHA-48271.
+```
+
+Run a second short turn and inspect both the harness state and backend trace.
+This case passes only when all of the following hold:
+
+- every result has `compacted=False` and `read_enabled=False`;
+- `sigma_written_tokens > 0` while `sigma_readable_tokens == 0`;
+- every append and generation call receives `read_state=None`;
+- a Qwen SGLang delta metric sample reports `read_tokens == 0`;
+- greedy output matches a fresh native-only control run.
+
+The last check catches accidental memory influence even when the read-state
+flag is not exposed by a serving wrapper.
+
+### Case B: post-compact evicted recall
+
+Use a small native budget, for example `context_window_tokens=64` and
+`compact_target_tokens=16`. Run the fact turn, enough filler turns to exceed
+the budget, and then ask:
+
+```text
+What is the project code? Answer only the code.
+```
+
+The fact turn must be in an evicted segment before the question is generated.
+The protocol gate passes when:
+
+- at least one compact occurs and `read_enabled=True` afterward;
+- the fact segment has `in_native_cache=False` and appears in
+  `readable_segments`;
+- `memory_version` advances and the reader snapshot contains that segment;
+- the question's backend generation receives a non-null read state;
+- the Qwen SGLang delta metrics report `read_tokens > 0` and nonzero read
+  strength or query-correction ratio.
+
+Decode the answer and record exact-match recall as a separate semantic result.
+An incorrect answer with positive read metrics means the wiring works but the
+checkpoint or prompt needs a quality investigation; an answer without read
+metrics is not evidence that Sigma memory was used.
+
 ## Policies to compare
 
 Keep the model, reader adapter, tokenizer, training checkpoint, decoding

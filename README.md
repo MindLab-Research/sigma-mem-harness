@@ -151,6 +151,24 @@ installation has an ABI mismatch. The backend still keeps the native KV cache
 logical, so this validates the memory protocol and schedules rather than
 serving-side paged-KV latency.
 
+## Local tuned checkpoints
+
+The two trained adapter checkpoints can be placed under `tuned_ckpts/` for
+local harness runs. The directory prefix records the actual reader base model;
+the part after `__` preserves the original training weight name:
+
+```text
+tuned_ckpts/
+├── qwen3-4b__qwen3-4b-mix3wh32_sigma_succ0_r64_rr02_lag0_scu_aoffni_gate64/
+└── qwen3-8b__qwen3-4b-mix3wh32_sigma_succ0_r64_rr02_lag0_d8b_scu_aoffni_gate64/
+```
+
+The first directory is paired with Qwen3-4B (`hidden_size=2560`); the second
+is paired with a Qwen3-8B-compatible reader (`hidden_size=4096`). Both use the
+Qwen3-0.6B SigmaWriter state recorded in each checkpoint's `sigma_writer.json`.
+The checkpoint files are local assets and are excluded from Git by
+`.gitignore`.
+
 ## Original Qwen SGLang backend
 
 `QwenSGLangBackend` connects the harness to the original delta-mem SGLang

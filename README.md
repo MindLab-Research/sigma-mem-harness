@@ -178,6 +178,39 @@ the original per-session `dmr-<session>` IDs. This backend is intended for
 testing real trained Qwen adapters and the harness write schedules; it keeps a
 logical native cache until a serving-side KV object is wired in.
 
+The reader, writer, and serving engine are configurable objects rather than
+part of the conversation state machine. For a copied checkpoint, the factory
+below selects the newest adapter iteration and loads the writer settings saved
+next to it:
+
+```python
+from sima_mem_harness import QwenSGLangConfig, SigmaConversationHarness
+
+config = QwenSGLangConfig.from_checkpoint(
+    reader_model_path="/models/Qwen3-4B-Instruct-2507",
+    checkpoint_dir="tuned_ckpts/qwen3-4b__qwen3-4b-mix3wh32_sigma_succ0_r64_rr02_lag0_scu_aoffni_gate64",
+    # writer_model_path="/models/Qwen3-0.6B",  # optional override
+)
+runtime = config.build()
+try:
+    harness = SigmaConversationHarness(
+        runtime.backend,
+        context_window_tokens=8192,
+        compact_target_tokens=4096,
+    )
+    prompt_ids = runtime.tokenizer.encode("Hello", add_special_tokens=False)
+    result = harness.run_turn(prompt_ids, max_new_tokens=128)
+finally:
+    runtime.shutdown()
+```
+
+To use the Qwen3-8B-compatible checkpoint, change only
+`reader_model_path` and `checkpoint_dir`. For full control, construct
+`QwenSigmaReaderConfig` and `QwenSigmaWriterConfig` directly, or save/load a
+`QwenSGLangConfig` as JSON. The reader config sets the Sigma adapter
+environment for spawned SGLang ranks; the writer config is independent of the
+reader and can point to a different frozen model.
+
 The backend requires the delta-mem SGLang environment and a model whose
 adapter shapes match the checkpoint. The original reference writer settings
 (`layer=19`, `weight=surprisal`, trained gate state, and the saved writer

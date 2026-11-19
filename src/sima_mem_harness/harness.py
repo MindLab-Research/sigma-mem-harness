@@ -257,6 +257,24 @@ class SigmaConversationHarness:
             memory = segment.memory if memory is None else memory.add(segment.memory)
         return memory
 
+    @staticmethod
+    def _unique_segments(segments: Sequence[MemorySegment]) -> list[MemorySegment]:
+        """Keep one immutable memory segment per conversation turn.
+
+        A turn created after the first compact is already in
+        ``readable_segments``. When that same turn is later evicted from the
+        native tail, compact must not append it a second time.
+        """
+
+        unique: list[MemorySegment] = []
+        seen: set[str] = set()
+        for segment in segments:
+            if segment.segment_id in seen:
+                continue
+            seen.add(segment.segment_id)
+            unique.append(segment)
+        return unique
+
     def _record_event(self, operation: str, *, read_state_recomputed: bool = False) -> None:
         snapshot_version = None
         if self.state.reader_snapshot is not None:
@@ -324,7 +342,9 @@ class SigmaConversationHarness:
         evicted_segments = [
             segment for segment in self.state.memory_segments if segment.segment_id in evicted_ids
         ]
-        candidate_segments = list(self.state.readable_segments) + evicted_segments
+        candidate_segments = self._unique_segments(
+            [*self.state.readable_segments, *evicted_segments]
+        )
         candidate_memory = self._sum_segments(candidate_segments)
         if candidate_memory is None:
             raise RuntimeError("compact selected no memory segments")

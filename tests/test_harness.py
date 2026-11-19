@@ -89,6 +89,19 @@ def test_compact_failure_keeps_native_state_and_read_gate_unchanged():
     assert harness.turns[0].in_native_cache is True
 
 
+def test_repeated_compact_does_not_duplicate_readable_segments():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(backend, context_window_tokens=7, compact_target_tokens=4)
+
+    harness.run_turn([1, 2, 3], max_new_tokens=1)
+    harness.run_turn([4, 5, 6], max_new_tokens=1)
+    harness.run_turn([7], max_new_tokens=1)
+
+    segment_ids = [segment.segment_id for segment in harness.state.readable_segments]
+    assert len(segment_ids) == len(set(segment_ids))
+    assert segment_ids == ["turn-000001", "turn-000002", "turn-000003"]
+
+
 def test_prompt_that_cannot_fit_is_rejected_before_model_calls():
     backend = TraceBackend()
     harness = SigmaConversationHarness(backend, context_window_tokens=8)

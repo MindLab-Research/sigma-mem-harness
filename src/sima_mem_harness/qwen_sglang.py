@@ -26,6 +26,16 @@ class QwenSGLangReadState:
 
 
 @dataclass(frozen=True)
+class QwenGenerationRecord:
+    """Evidence that a generation used native-only or Sigma read mode."""
+
+    read_enabled: bool
+    rid: str | None
+    input_tokens: int
+    generated_tokens: int
+
+
+@dataclass(frozen=True)
 class QwenSigmaReaderConfig:
     """Configuration for the decoder and its trained Sigma reader adapter.
 
@@ -295,6 +305,8 @@ class QwenSGLangBackend:
         self.session_id = session_id
         self._memory_version = 0
         self._read_index = 0
+        self.prepare_read_calls = 0
+        self.generation_calls: list[QwenGenerationRecord] = []
 
         from delta_mem_miles.sglang.common import delta_read_rid
 
@@ -310,6 +322,7 @@ class QwenSGLangBackend:
 
     def prepare_read_state(self, memory: SigmaMemory) -> QwenSGLangReadState:
         self._memory_version += 1
+        self.prepare_read_calls += 1
         self.engine.delta_set_sigma_memory(self.session_id, memory)
         return QwenSGLangReadState(self.session_id, self._memory_version)
 
@@ -349,6 +362,14 @@ class QwenSGLangBackend:
         if generated and isinstance(generated[0], list):
             generated = generated[0]
         generated = tuple(int(token) for token in generated)
+        self.generation_calls.append(
+            QwenGenerationRecord(
+                read_enabled=read_state is not None,
+                rid=rid,
+                input_tokens=len(cache.token_ids),
+                generated_tokens=len(generated),
+            )
+        )
         if on_token_chunk is not None and generated:
             # The SGLang Engine API returns a completed response here. A
             # streaming engine can replace this with incremental callbacks.
@@ -356,4 +377,4 @@ class QwenSGLangBackend:
         return generated
 
 
-__all__ = ["QwenSGLangBackend", "QwenSGLangReadState"]
+__all__ = ["QwenGenerationRecord", "QwenSGLangBackend", "QwenSGLangReadState"]

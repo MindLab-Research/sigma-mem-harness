@@ -22,6 +22,7 @@ from .harness import (
 )
 from .memory import SigmaMemory
 from .qwen_sglang import (
+    QwenGenerationRecord,
     QwenSGLangBackend,
     QwenSGLangConfig,
     QwenSGLangReadState,
@@ -42,6 +43,7 @@ __all__ = [
     "ReaderSnapshot",
     "QwenSGLangBackend",
     "QwenSGLangConfig",
+    "QwenGenerationRecord",
     "QwenSGLangReadState",
     "QwenSGLangRuntime",
     "QwenSigmaReaderConfig",

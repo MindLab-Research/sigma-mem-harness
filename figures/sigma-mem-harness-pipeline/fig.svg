@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 504 218" width="504pt" height="218pt"
+     font-family="'TeX Gyre Heros','Helvetica Neue',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 6 6" refX="5.2" refY="3" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#666666"/>
+    </marker>
+    <marker id="arrow-accent" viewBox="0 0 6 6" refX="5.2" refY="3" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#c00000"/>
+    </marker>
+    <style>
+      .lane-title { font-size: 8pt; font-weight: 700; fill: #36393d; }
+      .label { font-size: 6.7pt; font-weight: 700; fill: #0d0d0d; }
+      .sub { font-size: 6.1pt; font-weight: 400; fill: #595959; }
+      .edge-label { font-size: 5.9pt; font-weight: 400; fill: #595959; }
+      .legend-label { font-size: 6pt; font-weight: 400; fill: #36393d; }
+      .step-text { font-size: 6pt; font-weight: 700; fill: #ffffff; text-anchor: middle; dominant-baseline: central; }
+    </style>
+  </defs>
+
+  <!-- Three phase lanes. -->
+  <g id="l:online-path" data-kind="lane" data-order="0" data-role="existing">
+    <rect x="8" y="8" width="488" height="63" rx="3" fill="#f2f2f2" stroke="#b7b7b7" stroke-width="0.55"/>
+    <text x="15" y="20.3" class="lane-title">Online turn path</text>
+  </g>
+  <g id="l:write-path" data-kind="lane" data-order="1" data-role="boundary">
+    <rect x="8" y="80" width="488" height="64" rx="3" fill="#fff8e6" stroke="#d9cda8" stroke-width="0.55"/>
+    <text x="15" y="94" class="lane-title">Write path</text>
+  </g>
+  <g id="l:compact-read" data-kind="lane" data-order="2" data-role="boundary">
+    <rect x="8" y="153" width="488" height="58" rx="3" fill="#edf7eb" stroke="#b8d2b3" stroke-width="0.55"/>
+    <text x="15" y="167.3" class="lane-title">Compact / read path</text>
+  </g>
+
+  <!-- Main online path nodes. -->
+  <g id="n:user-turn" data-kind="node" data-role="external" data-parent="online-path">
+    <rect x="18" y="32" width="53" height="24" rx="3" fill="#ffffff" stroke="#36393d" stroke-width="0.75"/>
+    <text x="44.5" y="47" class="label" text-anchor="middle">User turn</text>
+  </g>
+  <g id="n:tokenizer" data-kind="node" data-role="existing" data-parent="online-path">
+    <rect x="85" y="32" width="58" height="24" rx="3" fill="#fff2cc" stroke="#36393d" stroke-width="0.75"/>
+    <text x="114" y="47" class="label" text-anchor="middle">Tokenizer</text>
+  </g>
+  <g id="n:turn-controller" data-kind="node" data-role="novel" data-parent="online-path">
+    <rect x="157" y="27" width="80" height="34" rx="3" fill="#ed7d31" stroke="#36393d" stroke-width="0.75"/>
+    <text x="197" y="39" class="label" text-anchor="middle">Turn controller</text>
+    <text x="197" y="50" class="sub" text-anchor="middle" fill="#0d0d0d">capacity + read gate</text>
+  </g>
+  <g id="n:native-kv-tail" data-kind="node" data-role="existing" data-parent="online-path">
+    <rect x="251" y="32" width="68" height="24" rx="3" fill="#dae8fc" stroke="#36393d" stroke-width="0.75"/>
+    <text x="285" y="43" class="label" text-anchor="middle">Native KV</text>
+    <text x="285" y="51" class="sub" text-anchor="middle">recent tail</text>
+  </g>
+  <g id="n:reader-decoder" data-kind="node" data-role="existing" data-parent="online-path">
+    <rect x="333" y="27" width="78" height="34" rx="3" fill="#dae8fc" stroke="#36393d" stroke-width="0.75"/>
+    <text x="372" y="38" class="label" text-anchor="middle">Reader-equipped</text>
+    <text x="372" y="47" class="label" text-anchor="middle">decoder</text>
+    <text x="372" y="56" class="sub" text-anchor="middle">base + adapter</text>
+  </g>
+  <g id="n:assistant-tokens" data-kind="node" data-role="external" data-parent="online-path">
+    <rect x="435" y="32" width="57" height="24" rx="3" fill="#ffffff" stroke="#36393d" stroke-width="0.75"/>
+    <text x="463.5" y="42" class="label" text-anchor="middle">Assistant</text>
+    <text x="463.5" y="51" class="label" text-anchor="middle">tokens</text>
+  </g>
+
+  <!-- Write path nodes. -->
+  <g id="n:write-timing" data-kind="node" data-role="novel" data-parent="write-path">
+    <rect x="157" y="102" width="80" height="29" rx="3" fill="#fff2cc" stroke="#36393d" stroke-width="0.75"/>
+    <text x="197" y="113" class="label" text-anchor="middle">Write timing</text>
+    <text x="197" y="123" class="sub" text-anchor="middle">turn | n | segment</text>
+  </g>
+  <g id="n:sigma-writer" data-kind="node" data-role="existing" data-parent="write-path">
+    <rect x="251" y="102" width="68" height="29" rx="3" fill="#e2f0d9" stroke="#36393d" stroke-width="0.75"/>
+    <text x="285" y="113" class="label" text-anchor="middle">Sigma writer</text>
+    <text x="285" y="123" class="sub" text-anchor="middle">0.6B / configured</text>
+  </g>
+  <g id="n:written-memory" data-kind="node" data-role="novel" data-parent="write-path">
+    <rect x="333" y="102" width="78" height="29" rx="3" fill="#fff2cc" stroke="#36393d" stroke-width="0.75"/>
+    <text x="372" y="113" class="label" text-anchor="middle">Written memory H</text>
+    <text x="372" y="123" class="sub" text-anchor="middle">write-only H</text>
+  </g>
+
+  <!-- Compact/read path nodes. -->
+  <g id="n:compaction" data-kind="node" data-role="novel" data-parent="compact-read">
+    <rect x="157" y="176" width="80" height="29" rx="3" fill="#e2f0d9" stroke="#36393d" stroke-width="0.75"/>
+    <text x="197" y="187" class="label" text-anchor="middle">Compaction</text>
+    <text x="197" y="197" class="sub" text-anchor="middle">evict complete turns</text>
+  </g>
+  <g id="n:readable-memory" data-kind="node" data-role="novel" data-parent="compact-read">
+    <rect x="251" y="176" width="68" height="29" rx="3" fill="#e2f0d9" stroke="#36393d" stroke-width="0.75"/>
+    <text x="285" y="187" class="label" text-anchor="middle">Readable H</text>
+    <text x="285" y="197" class="sub" text-anchor="middle">segments</text>
+  </g>
+  <g id="n:reader-state" data-kind="node" data-role="novel" data-parent="compact-read">
+    <rect x="333" y="176" width="78" height="29" rx="3" fill="#dae8fc" stroke="#36393d" stroke-width="0.75"/>
+    <text x="372" y="187" class="label" text-anchor="middle">Reader state</text>
+    <text x="372" y="197" class="sub" text-anchor="middle">per-layer state</text>
+  </g>
+
+  <!-- Data and control edges. -->
+  <g id="e:user-tokenizer" data-kind="edge" data-from="user-turn" data-to="tokenizer" data-edge-kind="data" data-step="1">
+    <path d="M71 44 H85" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:tokenizer-controller" data-kind="edge" data-from="tokenizer" data-to="turn-controller" data-edge-kind="data" data-step="2">
+    <path d="M143 44 H157" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:controller-native" data-kind="edge" data-from="turn-controller" data-to="native-kv-tail" data-edge-kind="data" data-step="3">
+    <path d="M237 44 H251" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:native-decoder" data-kind="edge" data-from="native-kv-tail" data-to="reader-decoder" data-edge-kind="data">
+    <path d="M319 44 H333" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:decoder-output" data-kind="edge" data-from="reader-decoder" data-to="assistant-tokens" data-edge-kind="data" data-step="3">
+    <path d="M411 44 H435" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:assistant-controller" data-kind="edge" data-from="assistant-tokens" data-to="turn-controller" data-edge-kind="feedback">
+    <path d="M464 32 C464 20 190 20 190 27" fill="none" stroke="#666666" stroke-width="0.7" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="e:controller-schedule" data-kind="edge" data-from="turn-controller" data-to="write-timing" data-edge-kind="control">
+    <path d="M197 61 V102" fill="none" stroke="#666666" stroke-width="0.75" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+    <text x="196" y="82" class="edge-label">turn boundary</text>
+  </g>
+  <g id="e:assistant-schedule" data-kind="edge" data-from="assistant-tokens" data-to="write-timing" data-edge-kind="control">
+    <path d="M464 56 V93 H149 V116 H157" fill="none" stroke="#666666" stroke-width="0.7" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+    <text x="438" y="88" class="edge-label" text-anchor="end">assistant tokens</text>
+  </g>
+  <g id="e:schedule-writer" data-kind="edge" data-from="write-timing" data-to="sigma-writer" data-edge-kind="data" data-step="4">
+    <path d="M237 116 H251" fill="none" stroke="#666666" stroke-width="0.85" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:writer-memory" data-kind="edge" data-from="sigma-writer" data-to="written-memory" data-edge-kind="data">
+    <path d="M319 116 H333" fill="none" stroke="#666666" stroke-width="0.85" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="e:controller-compact" data-kind="edge" data-from="turn-controller" data-to="compaction" data-edge-kind="control">
+    <path d="M177 61 V66 H138 V166 H164 V176" fill="none" stroke="#666666" stroke-width="0.75" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="e:memory-compact" data-kind="edge" data-from="written-memory" data-to="compaction" data-edge-kind="control" data-step="5">
+    <path d="M372 131 V145 H230 V166 H190 V176" fill="none" stroke="#666666" stroke-width="1.0" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+    <text x="292" y="149" class="edge-label" text-anchor="middle">first compact</text>
+  </g>
+  <g id="e:compact-readable" data-kind="edge" data-from="compaction" data-to="readable-memory" data-edge-kind="data">
+    <path d="M237 189 H251" fill="none" stroke="#666666" stroke-width="0.85" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:readable-reader" data-kind="edge" data-from="readable-memory" data-to="reader-state" data-edge-kind="data" data-step="6">
+    <path d="M319 189 H333" fill="none" stroke="#666666" stroke-width="0.85" marker-end="url(#arrow)"/>
+  </g>
+  <g id="e:reader-state-decoder" data-kind="edge" data-from="reader-state" data-to="reader-decoder" data-edge-kind="data">
+    <path d="M372 176 V160 H417 V73 H372 V61" fill="none" stroke="#c00000" stroke-width="1.0" marker-end="url(#arrow-accent)"/>
+    <text x="425" y="151" class="edge-label" fill="#c00000">Sigma read</text>
+  </g>
+  <g id="e:compact-native" data-kind="edge" data-from="compaction" data-to="native-kv-tail" data-edge-kind="data">
+    <path d="M230 189 V154 H325 V73 H285 V56" fill="none" stroke="#666666" stroke-width="0.75" marker-end="url(#arrow)"/>
+    <text x="300" y="139" class="edge-label">rebuild KV</text>
+  </g>
+
+  <!-- Numbered walkthrough markers. -->
+  <g id="s:1" data-kind="step" data-attached-to="user-tokenizer"><circle cx="76" cy="31" r="5.2" fill="#36393d"/><text x="76" y="31" class="step-text">1</text></g>
+  <g id="s:2" data-kind="step" data-attached-to="tokenizer-controller"><circle cx="145" cy="31" r="5.2" fill="#36393d"/><text x="145" y="31" class="step-text">2</text></g>
+  <g id="s:3" data-kind="step" data-attached-to="controller-native"><circle cx="239" cy="31" r="5.2" fill="#36393d"/><text x="239" y="31" class="step-text">3</text></g>
+  <g id="s:4" data-kind="step" data-attached-to="schedule-writer"><circle cx="239" cy="96" r="5.2" fill="#36393d"/><text x="239" y="96" class="step-text">4</text></g>
+  <g id="s:5" data-kind="step" data-attached-to="memory-compact"><circle cx="239" cy="160" r="5.2" fill="#36393d"/><text x="239" y="160" class="step-text">5</text></g>
+  <g id="s:6" data-kind="step" data-attached-to="readable-reader"><circle cx="325" cy="177" r="5.2" fill="#36393d"/><text x="325" y="177" class="step-text">6</text></g>
+
+  <!-- Small in-figure legend. -->
+  <g id="legend" data-kind="legend">
+    <path d="M315 17 H334" fill="none" stroke="#666666" stroke-width="0.9" marker-end="url(#arrow)"/>
+    <text x="338" y="19" class="legend-label">data</text>
+    <path d="M369 17 H388" fill="none" stroke="#666666" stroke-width="0.9" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+    <text x="392" y="19" class="legend-label">compact/control</text>
+  </g>
+
+  <g id="a:read-gate-note" data-kind="annotation" data-anchor="reader-state">
+    <text x="15" y="208" class="sub" text-anchor="start" fill="#595959">H is write-only before first compact.</text>
+  </g>
+</svg>

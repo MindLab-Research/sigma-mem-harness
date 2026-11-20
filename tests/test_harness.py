@@ -1,7 +1,7 @@
 import pytest
 
-from sima_mem_harness import MemoryWriteConfig, SigmaConversationHarness
-from sima_mem_harness.toy import TraceBackend
+from sigma_mem_harness import MemoryWriteConfig, SigmaConversationHarness
+from sigma_mem_harness.toy import TraceBackend
 
 
 def test_before_compact_sigma_only_writes_and_never_reads():

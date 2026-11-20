@@ -356,7 +356,7 @@ class QwenSGLangBackend:
             input_ids=list(cache.token_ids),
             sampling_params=sampling_params,
             rid=rid,
-            cache_salt=f"sima-mem-harness:{self.session_id}",
+            cache_salt=f"sigma-mem-harness:{self.session_id}",
         )
         generated = result.get("output_ids", result.get("token_ids", []))
         if generated and isinstance(generated[0], list):

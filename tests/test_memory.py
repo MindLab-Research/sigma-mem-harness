@@ -1,6 +1,6 @@
 import torch
 
-from sima_mem_harness.memory import SigmaMemory
+from sigma_mem_harness.memory import SigmaMemory
 
 
 def test_sigma_memory_is_additive():

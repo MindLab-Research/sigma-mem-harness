@@ -1,6 +1,6 @@
 import json
 
-from sima_mem_harness import (
+from sigma_mem_harness import (
     QwenSGLangConfig,
     QwenSigmaReaderConfig,
     QwenSigmaWriterConfig,

@@ -1,0 +1,508 @@
+{
+  "meta": {
+    "id": "sigma-mem-harness-pipeline",
+    "title": "Sigma-memory harness pipeline",
+    "system": {
+      "name": "Sigma-memory harness",
+      "one_liner": "A configurable multi-turn harness that keeps recent context in native KV and enables Sigma reads after compaction."
+    },
+    "figure_kind": "whole-system",
+    "family": "systems",
+    "style": "corpus",
+    "venue_style": "acm",
+    "column": "double",
+    "width_pt": 504,
+    "max_height_pt": 218,
+    "template": "pipeline",
+    "direction": "left-right",
+    "panels": 1,
+    "palette": "blue-orange",
+    "font": "helvetica",
+    "step_markers": "circled-numbers",
+    "language": "en",
+    "version": 1,
+    "caption_draft": "Sigma-memory harness pipeline. Recent turns follow the native KV path. The configured writer updates H according to the selected write schedule, but the statistic remains write-only until compaction evicts complete turns; compaction then prepares reader state so subsequent decoder requests use Sigma memory alongside the retained native KV tail.",
+    "open_questions": [
+      "The reader is shown as one decoder plus its trained Sigma adapter rather than as a separate model.",
+      "Written memory H is shown as one logical store although segment mode can retain per-turn MemorySegment objects.",
+      "Current Qwen names appear only as the writer sublabel; the protocol remains model-agnostic."
+    ]
+  },
+  "lanes": [
+    {
+      "id": "online-path",
+      "label": "Online turn path",
+      "kind": "lane",
+      "orientation": "horizontal",
+      "order": 0,
+      "label_side": "top",
+      "role": "existing"
+    },
+    {
+      "id": "write-path",
+      "label": "Write path",
+      "kind": "lane",
+      "orientation": "horizontal",
+      "order": 1,
+      "label_side": "top",
+      "role": "boundary"
+    },
+    {
+      "id": "compact-read",
+      "label": "Compact / read path",
+      "kind": "lane",
+      "orientation": "horizontal",
+      "order": 2,
+      "label_side": "top",
+      "role": "boundary"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "user-turn",
+      "label": "User turn",
+      "kind": "actor",
+      "parent": "online-path",
+      "role": "external",
+      "grid": {
+        "row": 0,
+        "col": 0
+      }
+    },
+    {
+      "id": "tokenizer",
+      "label": "Tokenizer",
+      "kind": "module",
+      "parent": "online-path",
+      "role": "existing",
+      "grid": {
+        "row": 0,
+        "col": 1
+      }
+    },
+    {
+      "id": "turn-controller",
+      "label": "Turn controller",
+      "sublabel": "capacity gate + read gate",
+      "kind": "decision",
+      "parent": "online-path",
+      "role": "novel",
+      "emphasis": "accent",
+      "grid": {
+        "row": 0,
+        "col": 2
+      }
+    },
+    {
+      "id": "native-kv-tail",
+      "label": "Native KV tail",
+      "sublabel": "recent context",
+      "kind": "store",
+      "parent": "online-path",
+      "role": "existing",
+      "grid": {
+        "row": 0,
+        "col": 3
+      }
+    },
+    {
+      "id": "reader-decoder",
+      "label": "Reader-equipped decoder",
+      "sublabel": "base model + Sigma adapter",
+      "kind": "compute",
+      "parent": "online-path",
+      "role": "existing",
+      "grid": {
+        "row": 0,
+        "col": 4
+      }
+    },
+    {
+      "id": "assistant-tokens",
+      "label": "Assistant tokens",
+      "kind": "external",
+      "parent": "online-path",
+      "role": "external",
+      "grid": {
+        "row": 0,
+        "col": 5
+      }
+    },
+    {
+      "id": "write-timing",
+      "label": "Write timing",
+      "sublabel": "turn | every n tokens | segment",
+      "kind": "module",
+      "parent": "write-path",
+      "role": "novel",
+      "grid": {
+        "row": 1,
+        "col": 2
+      }
+    },
+    {
+      "id": "sigma-writer",
+      "label": "Sigma writer",
+      "sublabel": "Qwen3-0.6B or configured writer",
+      "kind": "compute",
+      "parent": "write-path",
+      "role": "existing",
+      "grid": {
+        "row": 1,
+        "col": 3
+      }
+    },
+    {
+      "id": "written-memory",
+      "label": "Written memory H",
+      "sublabel": "write-only H",
+      "kind": "store",
+      "parent": "write-path",
+      "role": "novel",
+      "grid": {
+        "row": 1,
+        "col": 4
+      }
+    },
+    {
+      "id": "compaction",
+      "label": "Compaction",
+      "sublabel": "evict complete turns",
+      "kind": "module",
+      "parent": "compact-read",
+      "role": "novel",
+      "grid": {
+        "row": 2,
+        "col": 3
+      }
+    },
+    {
+      "id": "readable-memory",
+      "label": "Readable H",
+      "sublabel": "segments",
+      "kind": "store",
+      "parent": "compact-read",
+      "role": "novel",
+      "grid": {
+        "row": 2,
+        "col": 4
+      }
+    },
+    {
+      "id": "reader-state",
+      "label": "Reader state",
+      "sublabel": "per-layer state",
+      "kind": "state",
+      "parent": "compact-read",
+      "role": "novel",
+      "grid": {
+        "row": 2,
+        "col": 5
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "user-tokenizer",
+      "from": "user-turn",
+      "to": "tokenizer",
+      "label": "raw text",
+      "kind": "data",
+      "weight": "main",
+      "step": 1,
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "tokenizer-controller",
+      "from": "tokenizer",
+      "to": "turn-controller",
+      "label": "token ids",
+      "kind": "data",
+      "weight": "main",
+      "step": 2,
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "controller-native",
+      "from": "turn-controller",
+      "to": "native-kv-tail",
+      "label": "append recent turn",
+      "kind": "data",
+      "weight": "main",
+      "step": 3,
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "native-decoder",
+      "from": "native-kv-tail",
+      "to": "reader-decoder",
+      "label": "native KV",
+      "kind": "data",
+      "weight": "main",
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "decoder-output",
+      "from": "reader-decoder",
+      "to": "assistant-tokens",
+      "label": "generated tokens",
+      "kind": "data",
+      "weight": "main",
+      "step": 3,
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "assistant-controller",
+      "from": "assistant-tokens",
+      "to": "turn-controller",
+      "label": "next turn",
+      "kind": "feedback",
+      "style": "solid",
+      "weight": "thin",
+      "route": "curved",
+      "from_side": "top",
+      "to_side": "top",
+      "route_hint": "return above the online lane without crossing the main spine"
+    },
+    {
+      "id": "controller-schedule",
+      "from": "turn-controller",
+      "to": "write-timing",
+      "label": "turn boundary",
+      "kind": "control",
+      "style": "dashed",
+      "weight": "normal",
+      "legend_ref": "compact-trigger",
+      "from_side": "bottom",
+      "to_side": "top"
+    },
+    {
+      "id": "assistant-schedule",
+      "from": "assistant-tokens",
+      "to": "write-timing",
+      "label": "assistant tokens",
+      "kind": "control",
+      "style": "dashed",
+      "weight": "thin",
+      "legend_ref": "compact-trigger",
+      "from_side": "bottom",
+      "to_side": "right",
+      "route_hint": "route down along the right margin and back to the write scheduler"
+    },
+    {
+      "id": "schedule-writer",
+      "from": "write-timing",
+      "to": "sigma-writer",
+      "label": "scheduled tokens",
+      "kind": "data",
+      "weight": "normal",
+      "step": 4,
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "writer-memory",
+      "from": "sigma-writer",
+      "to": "written-memory",
+      "label": "H",
+      "kind": "data",
+      "weight": "normal",
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "controller-compact",
+      "from": "turn-controller",
+      "to": "compaction",
+      "label": "",
+      "kind": "control",
+      "style": "dashed",
+      "weight": "normal",
+      "legend_ref": "compact-trigger",
+      "from_side": "bottom",
+      "to_side": "top",
+      "route_hint": "conditional path down the left side of the compact/read lane; end at the left side of Compaction"
+    },
+    {
+      "id": "memory-compact",
+      "from": "written-memory",
+      "to": "compaction",
+      "label": "first compact",
+      "kind": "control",
+      "style": "dashed",
+      "weight": "normal",
+      "step": 5,
+      "legend_ref": "compact-trigger",
+      "from_side": "bottom",
+      "to_side": "top"
+    },
+    {
+      "id": "compact-readable",
+      "from": "compaction",
+      "to": "readable-memory",
+      "label": "evicted complete turns",
+      "kind": "data",
+      "weight": "normal",
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "readable-reader",
+      "from": "readable-memory",
+      "to": "reader-state",
+      "label": "prepare read state",
+      "kind": "data",
+      "weight": "normal",
+      "step": 6,
+      "from_side": "right",
+      "to_side": "left"
+    },
+    {
+      "id": "reader-state-decoder",
+      "from": "reader-state",
+      "to": "reader-decoder",
+      "label": "Sigma read",
+      "kind": "data",
+      "weight": "normal",
+      "from_side": "top",
+      "to_side": "bottom",
+      "legend_ref": "data-flow"
+    },
+    {
+      "id": "compact-native",
+      "from": "compaction",
+      "to": "native-kv-tail",
+      "label": "rebuild recent tail",
+      "kind": "data",
+      "weight": "normal",
+      "from_side": "top",
+      "to_side": "bottom"
+    }
+  ],
+  "steps": [
+    {
+      "n": 1,
+      "attached_to": "user-tokenizer",
+      "text": "tokenize the user turn"
+    },
+    {
+      "n": 2,
+      "attached_to": "tokenizer-controller",
+      "text": "check native KV capacity"
+    },
+    {
+      "n": 3,
+      "attached_to": "controller-native",
+      "text": "generate from the recent tail"
+    },
+    {
+      "n": 4,
+      "attached_to": "schedule-writer",
+      "text": "write H under the selected policy"
+    },
+    {
+      "n": 5,
+      "attached_to": "memory-compact",
+      "text": "compact and move evicted turns"
+    },
+    {
+      "n": 6,
+      "attached_to": "readable-reader",
+      "text": "arm the reader for later turns"
+    }
+  ],
+  "legend": {
+    "mode": "explicit",
+    "placement": "inside",
+    "title": "Flow encoding",
+    "items": [
+      {
+        "id": "data-flow",
+        "label": "data path",
+        "swatch": {
+          "kind": "line",
+          "role": "arrow",
+          "line_style": "solid",
+          "head": "filled"
+        }
+      },
+      {
+        "id": "compact-trigger",
+        "label": "compact-triggered control",
+        "swatch": {
+          "kind": "line",
+          "role": "arrow",
+          "line_style": "dashed",
+          "head": "filled"
+        }
+      }
+    ]
+  },
+  "annotations": [
+    {
+      "id": "read-gate-note",
+      "text": "Before first compact: H is write-only; after compact: reader state is armed.",
+      "anchor": "reader-state",
+      "leader": true,
+      "kind": "callout",
+      "side": "bottom"
+    }
+  ],
+  "constraints": [
+    {
+      "kind": "same-row",
+      "targets": [
+        "user-turn",
+        "tokenizer",
+        "turn-controller",
+        "native-kv-tail",
+        "reader-decoder",
+        "assistant-tokens"
+      ]
+    },
+    {
+      "kind": "same-row",
+      "targets": [
+        "write-timing",
+        "sigma-writer",
+        "written-memory"
+      ]
+    },
+    {
+      "kind": "same-row",
+      "targets": [
+        "compaction",
+        "readable-memory",
+        "reader-state"
+      ]
+    },
+    {
+      "kind": "order",
+      "targets": [
+        "user-turn",
+        "tokenizer",
+        "turn-controller",
+        "native-kv-tail",
+        "reader-decoder",
+        "assistant-tokens"
+      ]
+    },
+    {
+      "kind": "same-height",
+      "targets": [
+        "user-turn",
+        "tokenizer",
+        "turn-controller",
+        "native-kv-tail",
+        "reader-decoder",
+        "assistant-tokens"
+      ]
+    }
+  ],
+  "notes": "Hand-drawn pipeline with three horizontal lanes. Solid arrows carry data; dashed arrows are compact-triggered or scheduling control. The reader-equipped decoder is drawn once and receives reader state only after compact."
+}

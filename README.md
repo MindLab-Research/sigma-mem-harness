@@ -1,4 +1,4 @@
-# sima-mem-harness
+# sigma-mem-harness
 
 A minimal multi-turn conversation harness for the following Sigma-memory
 protocol: **use only the model's native KV cache before compaction, and enable
@@ -48,66 +48,16 @@ failed solve or rebuild leaves the previous KV and read gate intact.
 
 ## Overall harness flow
 
-The harness keeps recent context in the model's native KV cache and moves only
-complete, evicted turns into Sigma memory. The first compact is the read gate:
-before it, Sigma memory can receive writes but no backend generation receives a
-reader state.
+![Sigma-memory harness pipeline](figures/sigma-mem-harness-pipeline/fig.final.svg)
 
-```mermaid
-flowchart TD
-    A([New user turn]) --> B{Prompt plus response fit native KV?}
-
-    B -->|Yes| C["Append prompt to native KV<br/>read_state is None before first compact"]
-    B -->|No| D[Flush pending segment writes]
-    D --> E[Select oldest complete turns]
-    E --> F[Add evicted turns to readable Sigma memory]
-    F --> G["Prepare reader state<br/>engine.delta_set_sigma_memory"]
-    G --> H[Rebuild native KV for recent tail]
-    H --> I[Enable Sigma reads]
-
-    C --> J[Generate assistant tokens]
-    I --> J
-
-    J --> K{Configured write timing}
-    K -->|turn| L["Write user and assistant<br/>at turn end"]
-    K -->|token_interval| M["Write prompt, then write<br/>every n generated tokens"]
-    K -->|segment| N["Queue complete turn<br/>until capacity, compact, or finish"]
-
-    L --> O[Update written_memory and turn segment]
-    M --> O
-    N --> O
-    O --> P{Sigma reads already enabled?}
-    P -->|No| Q[Keep memory write-only]
-    P -->|Yes| R["Refresh reader snapshot and<br/>rebuild native state for next turn"]
-    Q --> A
-    R --> A
-```
-
-The runtime model path is separated from the conversation state machine. The
-reader is the decoder plus its trained Sigma adapter, while the writer is an
-independent frozen model that produces the additive statistic `H`:
-
-```mermaid
-flowchart LR
-    U[User text] --> T[Tokenizer]
-    T --> H[Conversation harness]
-    H --> KV["Native KV cache<br/>recent tail"]
-    H --> W["Sigma writer<br/>Qwen3-0.6B or configured writer"]
-    W --> WM["Written memory H<br/>write-only before compact"]
-    WM -->|first compact| RM[Readable Sigma memory]
-    RM --> RS["Reader state<br/>trained adapter in decoder"]
-    KV --> D[Decoder generation]
-    RS --> D
-    D --> O[Assistant tokens]
-    O --> H
-```
+*The harness keeps recent turns in native KV, writes `H` according to the configured schedule, and enables the reader only after the first compact.*
 
 ## Write timing modes
 
 The write schedule is configurable through `MemoryWriteConfig`:
 
 ```python
-from sima_mem_harness import MemoryWriteConfig, SigmaConversationHarness
+from sigma_mem_harness import MemoryWriteConfig, SigmaConversationHarness
 
 # Existing behavior: write user and assistant after every completed turn.
 turn_end = MemoryWriteConfig(mode="turn")
@@ -138,7 +88,7 @@ before compact.
 ```bash
 python -m pip install -e '.[test]'
 pytest -q
-python -m sima_mem_harness.smoke
+python -m sigma_mem_harness.smoke
 ```
 
 `TraceBackend` is a deterministic protocol-test backend. It does not pretend
@@ -152,8 +102,8 @@ reference generation path and does not expose incremental paged KV yet.
 `SigmaV41ReferenceBackend` can wrap an already-constructed `SigmaV41` model:
 
 ```python
-from sima_mem_harness import SigmaConversationHarness
-from sima_mem_harness.v41 import SigmaV41ReferenceBackend
+from sigma_mem_harness import SigmaConversationHarness
+from sigma_mem_harness.v41 import SigmaV41ReferenceBackend
 
 backend = SigmaV41ReferenceBackend(model)
 harness = SigmaConversationHarness(
@@ -240,7 +190,7 @@ below selects the newest adapter iteration and loads the writer settings saved
 next to it:
 
 ```python
-from sima_mem_harness import QwenSGLangConfig, SigmaConversationHarness
+from sigma_mem_harness import QwenSGLangConfig, SigmaConversationHarness
 
 config = QwenSGLangConfig.from_checkpoint(
     reader_model_path="/models/Qwen3-4B-Instruct-2507",

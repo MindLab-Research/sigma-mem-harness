@@ -46,6 +46,62 @@ while the readable memory version is unchanged. Compaction prepares the new
 reader state and rebuilt native cache before committing any eviction, so a
 failed solve or rebuild leaves the previous KV and read gate intact.
 
+## Overall harness flow
+
+The harness keeps recent context in the model's native KV cache and moves only
+complete, evicted turns into Sigma memory. The first compact is the read gate:
+before it, Sigma memory can receive writes but no backend generation receives a
+reader state.
+
+```mermaid
+flowchart TD
+    A([New user turn]) --> B{Prompt plus response fit native KV?}
+
+    B -->|Yes| C["Append prompt to native KV<br/>read_state is None before first compact"]
+    B -->|No| D[Flush pending segment writes]
+    D --> E[Select oldest complete turns]
+    E --> F[Add evicted turns to readable Sigma memory]
+    F --> G["Prepare reader state<br/>engine.delta_set_sigma_memory"]
+    G --> H[Rebuild native KV for recent tail]
+    H --> I[Enable Sigma reads]
+
+    C --> J[Generate assistant tokens]
+    I --> J
+
+    J --> K{Configured write timing}
+    K -->|turn| L["Write user and assistant<br/>at turn end"]
+    K -->|token_interval| M["Write prompt, then write<br/>every n generated tokens"]
+    K -->|segment| N["Queue complete turn<br/>until capacity, compact, or finish"]
+
+    L --> O[Update written_memory and turn segment]
+    M --> O
+    N --> O
+    O --> P{Sigma reads already enabled?}
+    P -->|No| Q[Keep memory write-only]
+    P -->|Yes| R["Refresh reader snapshot and<br/>rebuild native state for next turn"]
+    Q --> A
+    R --> A
+```
+
+The runtime model path is separated from the conversation state machine. The
+reader is the decoder plus its trained Sigma adapter, while the writer is an
+independent frozen model that produces the additive statistic `H`:
+
+```mermaid
+flowchart LR
+    U[User text] --> T[Tokenizer]
+    T --> H[Conversation harness]
+    H --> KV["Native KV cache<br/>recent tail"]
+    H --> W["Sigma writer<br/>Qwen3-0.6B or configured writer"]
+    W --> WM["Written memory H<br/>write-only before compact"]
+    WM -->|first compact| RM[Readable Sigma memory]
+    RM --> RS["Reader state<br/>trained adapter in decoder"]
+    KV --> D[Decoder generation]
+    RS --> D
+    D --> O[Assistant tokens]
+    O --> H
+```
+
 ## Write timing modes
 
 The write schedule is configurable through `MemoryWriteConfig`:

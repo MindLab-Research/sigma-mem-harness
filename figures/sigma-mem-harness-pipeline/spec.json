@@ -377,7 +377,7 @@
       "id": "compact-native",
       "from": "compaction",
       "to": "native-kv-tail",
-      "label": "rebuild recent tail",
+      "label": "",
       "kind": "data",
       "weight": "normal",
       "from_side": "top",

@@ -57,9 +57,9 @@
     <text x="372" y="56" class="sub" text-anchor="middle">base + adapter</text>
   </g>
   <g id="n:assistant-tokens" data-kind="node" data-role="external" data-parent="online-path">
-    <rect x="435" y="32" width="57" height="24" rx="3" fill="#ffffff" stroke="#36393d" stroke-width="0.75"/>
-    <text x="463.5" y="42" class="label" text-anchor="middle">Assistant</text>
-    <text x="463.5" y="51" class="label" text-anchor="middle">tokens</text>
+    <rect x="425" y="32" width="62" height="24" rx="3" fill="#ffffff" stroke="#36393d" stroke-width="0.75"/>
+    <text x="456" y="42" class="label" text-anchor="middle">Assistant</text>
+    <text x="456" y="51" class="label" text-anchor="middle">tokens</text>
   </g>
 
   <!-- Write path nodes. -->
@@ -110,10 +110,10 @@
     <path d="M319 44 H333" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
   </g>
   <g id="e:decoder-output" data-kind="edge" data-from="reader-decoder" data-to="assistant-tokens" data-edge-kind="data" data-step="3">
-    <path d="M411 44 H435" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
+    <path d="M411 44 H425" fill="none" stroke="#666666" stroke-width="1.1" marker-end="url(#arrow)"/>
   </g>
   <g id="e:assistant-controller" data-kind="edge" data-from="assistant-tokens" data-to="turn-controller" data-edge-kind="feedback">
-    <path d="M464 32 C464 20 190 20 190 27" fill="none" stroke="#666666" stroke-width="0.7" marker-end="url(#arrow)"/>
+    <path d="M461 32 C461 20 190 20 190 27" fill="none" stroke="#666666" stroke-width="0.7" marker-end="url(#arrow)"/>
     
   </g>
   <g id="e:controller-schedule" data-kind="edge" data-from="turn-controller" data-to="write-timing" data-edge-kind="control">
@@ -121,7 +121,7 @@
     <text x="196" y="82" class="edge-label">turn boundary</text>
   </g>
   <g id="e:assistant-schedule" data-kind="edge" data-from="assistant-tokens" data-to="write-timing" data-edge-kind="control">
-    <path d="M464 56 V93 H149 V116 H157" fill="none" stroke="#666666" stroke-width="0.7" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
+    <path d="M461 56 V93 H149 V116 H157" fill="none" stroke="#666666" stroke-width="0.7" stroke-dasharray="3 2" marker-end="url(#arrow)"/>
     <text x="438" y="88" class="edge-label" text-anchor="end">assistant tokens</text>
   </g>
   <g id="e:schedule-writer" data-kind="edge" data-from="write-timing" data-to="sigma-writer" data-edge-kind="data" data-step="4">
@@ -146,12 +146,12 @@
     <path d="M319 189 H333" fill="none" stroke="#666666" stroke-width="0.85" marker-end="url(#arrow)"/>
   </g>
   <g id="e:reader-state-decoder" data-kind="edge" data-from="reader-state" data-to="reader-decoder" data-edge-kind="data">
-    <path d="M372 176 V160 H417 V73 H372 V61" fill="none" stroke="#c00000" stroke-width="1.0" marker-end="url(#arrow-accent)"/>
+    <path d="M372 176 V160 H327 V65 H372 V61" fill="none" stroke="#c00000" stroke-width="1.0" marker-end="url(#arrow-accent)"/>
     <text x="425" y="151" class="edge-label" fill="#c00000">Sigma read</text>
   </g>
   <g id="e:compact-native" data-kind="edge" data-from="compaction" data-to="native-kv-tail" data-edge-kind="data">
     <path d="M230 189 V154 H325 V73 H285 V56" fill="none" stroke="#666666" stroke-width="0.75" marker-end="url(#arrow)"/>
-    <text x="300" y="139" class="edge-label">rebuild KV</text>
+    
   </g>
 
   <!-- Numbered walkthrough markers. -->

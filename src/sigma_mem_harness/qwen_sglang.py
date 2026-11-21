@@ -131,7 +131,7 @@ class QwenSGLangConfig:
 
     reader: QwenSigmaReaderConfig
     writer: QwenSigmaWriterConfig
-    session_id: str = "sima-harness"
+    session_id: str = "sigma-harness"
     local_files_only: bool = True
     engine_kwargs: Mapping[str, Any] | None = None
 
@@ -160,7 +160,7 @@ class QwenSGLangConfig:
         *,
         adapter_dir: str | None = None,
         writer_model_path: str | None = None,
-        session_id: str = "sima-harness",
+        session_id: str = "sigma-harness",
         local_files_only: bool = True,
         engine_kwargs: Mapping[str, Any] | None = None,
     ) -> "QwenSGLangConfig":
@@ -246,7 +246,7 @@ class QwenSGLangConfig:
         return cls(
             reader=QwenSigmaReaderConfig(**payload["reader"]),
             writer=QwenSigmaWriterConfig(**payload["writer"]),
-            session_id=payload.get("session_id", "sima-harness"),
+            session_id=payload.get("session_id", "sigma-harness"),
             local_files_only=bool(payload.get("local_files_only", True)),
             engine_kwargs=payload.get("engine_kwargs"),
         )
@@ -299,7 +299,7 @@ class QwenSGLangRuntime:
 class QwenSGLangBackend:
     """Wrap ``delta_mem_miles.sglang.engine_control`` for Sigma reads."""
 
-    def __init__(self, engine: Any, writer: Any, *, session_id: str = "sima-harness") -> None:
+    def __init__(self, engine: Any, writer: Any, *, session_id: str = "sigma-harness") -> None:
         self.engine = engine
         self.writer = writer
         self.session_id = session_id

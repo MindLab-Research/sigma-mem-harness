@@ -5,6 +5,100 @@ recent, position-sensitive context and Sigma memory for compacted history. A
 single final F1 number is not enough because a policy can improve recall while
 adding unacceptable write or compaction latency.
 
+## Benchmark selection
+
+The benchmark must be replayable as an online stream. A dataset that only gives
+one long prompt does not exercise this harness: the harness needs complete
+user/assistant turns, a native-KV budget smaller than the accumulated history,
+and a later query whose evidence may have been evicted. Every external dataset
+therefore needs a replay adapter that feeds its sessions or trajectories one
+turn at a time and records whether the evidence turn was compacted.
+
+### Recommended benchmark stack
+
+| Priority | Benchmark | What it measures | Fit for this harness | Recommended use |
+| --- | --- | --- | --- | --- |
+| P0 | **Sigma-Harness Gate Suite** (new) | Exact read/write gates, eviction positions, updates, multi-hop facts, distractors, and abstention | Direct; full control over token lengths and compact timing | Required protocol and regression suite |
+| P1 | [MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) ([paper](https://arxiv.org/abs/2507.05257)) | Incremental multi-turn memory with accurate retrieval, test-time learning, long-range understanding, and conflict resolution | Very strong; the data is explicitly split into interaction chunks and follows an “inject once, query multiple times” design | First external benchmark for write timing and post-compact recall |
+| P1 | [LongMemEval](https://github.com/xiaowu0162/LongMemEval) ([cleaned data](https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned)) | 500 questions covering information extraction, multi-session reasoning, knowledge updates, temporal reasoning, and abstention | Strong for the text-only Qwen harness; sessions have timestamps and evidence-turn/session labels | Main conversational-memory benchmark |
+| P1 | [LongMemEval-V2](https://github.com/xiaowu0162/LongMemEval-V2) ([paper](https://arxiv.org/abs/2605.12493)) | Agentic web/enterprise trajectories, static and dynamic state, workflow knowledge, environment gotchas, and premise awareness | Best modern long-history benchmark, but needs trajectory replay and multimodal support for screenshot questions | Second-stage agentic and ultra-long evaluation |
+| P2 | [GoodAI LTM Benchmark](https://github.com/GoodAI/goodai-ltm-benchmark) | Dynamic memory upkeep and long-span needle tasks with configurable 2K–500K memory spans | Good stress test; older and partly generated, so weaker as a natural conversation measure | Context-length and compact-frequency stress |
+| P2 | [InMind](https://github.com/imlrz/InMind) | Direct recall versus semantically indirect application of an earlier user fact | Good diagnostic for whether the reader can use memory when query/history lexical overlap is low | Reader and query-matching ablation |
+| P2 | [Locomo-Plus](https://github.com/xjtuleeyf/Locomo-Plus) | LoCoMo-style multi-hop, temporal, common-sense, single-hop, adversarial, plus a cognitive implicit-recall category | Useful natural-dialogue diagnostic, but not the primary long-context benchmark | Secondary cognitive-recall check |
+| P3 | [BEAM](https://arxiv.org/abs/2510.27246) | Long-term memory beyond million-token histories | Potentially useful for scale, but requires a careful streaming adapter and reproducible data setup | Later ultra-long stress test |
+
+The first external run should use MemoryAgentBench and
+`longmemeval_s_cleaned.json`. MemoryAgentBench is the closest match to our
+incremental interaction design. LongMemEval-S is the strongest text-only
+reference because each of its 500 instances contains timestamped sessions,
+turn-level evidence labels, and answer-session labels. Its released S version
+is roughly 115K tokens across about 40 sessions; the M version uses about 500
+sessions and is better treated as a scale stress test. The `oracle` version,
+which keeps only evidence sessions, is a useful upper-bound control rather than
+an online harness workload.
+
+LongMemEval-V2 is the most current benchmark in this list. It contains 451
+curated questions, up to 500 web or enterprise trajectories per haystack, and
+histories reaching roughly 115M tokens. Its official interface is a memory
+backend that inserts trajectories and returns evidence items for a downstream
+answerer. That interface is different from our online decoder and should not be
+compared by raw leaderboard score. We should adapt each trajectory into a
+turn-by-turn stream, then report both answer quality and the compact/read trace.
+The current text-only Qwen backend cannot claim full V2 coverage until image
+observations are supported.
+
+GoodAI LTM is valuable for controlled scaling because the filler span can be
+changed while the needles and scripts stay fixed. InMind isolates an important
+Sigma failure mode: the relevant query may be semantically related to a fact
+without sharing its words. Locomo-Plus adds a similar cognitive category to a
+natural dialogue set, but its role here is diagnostic rather than the main
+long-context result. ALFWorld trajectories can be used as an optional agent
+state-continuity stress test; they are not a substitute for a memory benchmark
+because task success often follows from the current observation and the
+released archive is not a complete multimodal evaluation environment.
+
+### Sigma-Harness Gate Suite
+
+The self-defined suite is necessary even when external benchmarks are used. It
+should contain short deterministic sessions with exact answers and explicit
+metadata:
+
+```text
+recent_recall       answer remains in native KV
+evicted_recall      answer is only in a compacted segment
+knowledge_update    old fact is replaced by a later fact
+temporal_reasoning  answer depends on event order or date
+multi_hop           facts are split across multiple segments
+distractor          unrelated segments surround the evidence
+abstention          no segment contains the requested fact
+```
+
+Each instance records `fact_turn`, `query_turn`, `must_compact`, and the
+expected evidence segment. The adapter rejects or separately reports an
+instance when `must_compact=true` but no compact occurred. This suite is the
+only reliable place to test the exact first-compact gate and all three write
+schedules before spending model-inference time on a large benchmark.
+
+### Replay protocol for every external benchmark
+
+For each history, sort sessions by their supplied timestamp and feed every
+user/assistant turn through the harness. Keep the final benchmark question
+outside the history and issue it as a new user turn. Set the native budget below
+the full history, for example 4K, 8K, and 16K, and keep the output reserve
+fixed. Store the benchmark evidence labels alongside the harness trace:
+
+```text
+question_id, history_tokens, native_budget, fact_session_ids
+fact_turn_ids, evicted_before_query, compact_count, memory_version
+read_enabled_at_query, reader_request_count, answer, gold_answer
+```
+
+The primary comparison is full-history versus native-only versus Sigma harness.
+Report recent and evicted evidence separately. A correct answer without an
+evicted evidence segment is not an evicted-memory result, and a `dmr-*` request
+without a reader-state trace is not sufficient evidence that Sigma memory
+affected the decoder.
+
 ## Minimal integration gates
 
 Run both cases with the same reader checkpoint, tokenizer, decoding settings,

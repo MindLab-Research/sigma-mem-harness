@@ -79,6 +79,22 @@ instance when `must_compact=true` but no compact occurred. This suite is the
 only reliable place to test the exact first-compact gate and all three write
 schedules before spending model-inference time on a large benchmark.
 
+The initial implementation is in
+[`evaluation/gate-suite/`](evaluation/gate-suite/). It contains a JSONL case
+file, a JSON schema, a deterministic runner, and a short usage guide. Run it
+from the repository root with:
+
+```bash
+python evaluation/gate-suite/run_gate_suite.py
+```
+
+The current examples cover pre-compact write-only behavior, evicted-memory
+read gating, repeated compact without duplicate segments, token-interval
+remainder flushing, forced segment flush at `finish()`, and transactional
+reader failure. The default matrix currently passes 12/12 TraceBackend runs.
+The same cases can later be replayed with the Qwen or DeepSeek backend, but
+their semantic answers must be reported separately from these protocol gates.
+
 ### Replay protocol for every external benchmark
 
 For each history, sort sessions by their supplied timestamp and feed every

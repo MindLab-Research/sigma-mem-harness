@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sigma-Harness Gate Suite case",
+  "type": "object",
+  "required": ["case_id", "turns", "max_new_tokens", "budgets", "schedules", "expected"],
+  "properties": {
+    "case_id": {"type": "string"},
+    "description": {"type": "string"},
+    "turns": {"type": "array", "minItems": 1, "items": {"type": "array", "items": {"type": "integer"}}},
+    "max_new_tokens": {"type": "integer", "minimum": 0},
+    "budgets": {
+      "type": "object",
+      "required": ["context_window_tokens", "compact_target_tokens"],
+      "properties": {
+        "context_window_tokens": {"type": "integer", "minimum": 1},
+        "compact_target_tokens": {"type": "integer", "minimum": 1},
+        "reserve_tokens": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "schedules": {"type": "array", "items": {"enum": ["turn", "token_interval", "segment"]}},
+    "schedule_params": {"type": "object"},
+    "query_turn_index": {"type": "integer", "minimum": 1},
+    "failure": {"type": "object"},
+    "expected": {"type": "object"}
+  },
+  "additionalProperties": false
+}

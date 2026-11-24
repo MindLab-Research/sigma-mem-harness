@@ -83,6 +83,62 @@ reference generation completes. `segment` mode flushes its pending turns when
 the configured capacity is reached, when `finish()` is called, or immediately
 before compact.
 
+## Compaction modes
+
+`CompactionConfig` controls how evicted context is represented after compact.
+The default is `sigma`, which keeps the recent native tail and represents old
+turns with Sigma memory and reader state:
+
+```python
+from sigma_mem_harness import CompactionConfig, SigmaConversationHarness
+
+sigma_only = CompactionConfig(mode="sigma")
+
+harness = SigmaConversationHarness(
+    backend,
+    context_window_tokens=8192,
+    compaction_config=sigma_only,
+)
+```
+
+The available modes are:
+
+| Mode | Recent context | Evicted context | Purpose |
+| --- | --- | --- | --- |
+| `sigma` | Exact native KV tail | Sigma `H` + reader state | Current default design |
+| `summary` | Exact native KV tail + summary tokens | Text summary only | Text-summary ablation |
+| `hybrid` | Exact native KV tail + summary tokens | Text summary + Sigma reader | Combined memory ablation |
+| `recent_only` | Exact native KV tail | Dropped | No-memory baseline |
+
+`summary` and `hybrid` require an injected `SummaryBackend`. The provider
+receives the previous summary tokens followed by newly evicted turn tokens and
+returns summary token ids. Summary tokens are placed before the retained native
+tail when the native cache is rebuilt; they are not recursively written into
+Sigma memory. The harness deliberately does not choose a summarization model,
+so experiments can compare different summarizers independently:
+
+```python
+from sigma_mem_harness import CompactionConfig
+
+summary_mode = CompactionConfig(
+    mode="summary",
+    summary_backend=my_summary_backend,
+    summary_max_tokens=256,
+)
+
+hybrid_mode = CompactionConfig(
+    mode="hybrid",
+    summary_backend=my_summary_backend,
+    summary_max_tokens=256,
+)
+```
+
+The summary and hybrid modes are useful ablations because they distinguish the
+benefit of Sigma's learned continuous state from the benefit of natural-
+language summaries. `recent_only` provides the corresponding native-KV
+baseline. The deterministic `TraceSummaryBackend` in `sigma_mem_harness.toy`
+is intended for protocol tests; it is not a semantic summarizer.
+
 ## Local usage
 
 ```bash

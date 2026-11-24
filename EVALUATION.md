@@ -115,6 +115,25 @@ evicted evidence segment is not an evicted-memory result, and a `dmr-*` request
 without a reader-state trace is not sufficient evidence that Sigma memory
 affected the decoder.
 
+### Compaction representation ablations
+
+The harness exposes four compact representations through `CompactionConfig`:
+
+| Mode | What remains in native context after compact | What represents evicted context |
+| --- | --- | --- |
+| `sigma` | Recent exact token tail | Sigma `H` and reader state |
+| `summary` | Recent exact tail plus summary tokens | Text summary tokens |
+| `hybrid` | Recent exact tail plus summary tokens | Text summary plus Sigma reader state |
+| `recent_only` | Recent exact token tail | Nothing; no-memory control |
+
+Run these modes with the same native budget, write schedule, reader checkpoint,
+and question set. For `summary` and `hybrid`, hold the summary model and
+`summary_max_tokens` fixed while comparing the compaction representation. The
+summary provider receives the previous summary followed by newly evicted turns;
+the resulting summary tokens are inserted before the retained tail and are not
+written back into Sigma memory. Report summary generation latency and summary
+token count separately from writer and reader costs.
+
 ## Minimal integration gates
 
 Run both cases with the same reader checkpoint, tokenizer, decoding settings,

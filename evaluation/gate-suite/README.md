@@ -144,6 +144,14 @@ writer call count, pending segment tokens, generation read flags, and generated
 token IDs. The generated tokens are deterministic test outputs; they are not a
 semantic answer score.
 
+Compaction representation is a separate ablation from write timing. The
+harness supports `sigma`, `summary`, `hybrid`, and `recent_only` through
+`CompactionConfig`; unit tests use `TraceSummaryBackend` to verify that summary
+tokens are inserted before the retained tail. Summary and hybrid mode require a
+real `SummaryBackend` when used with a model. Run the same cases in `sigma` and
+`recent_only` first, then add summary and hybrid once a semantic summary
+provider is configured.
+
 ## How to interpret failures
 
 - `precompact_write_only` fails: memory may be leaking into generation before

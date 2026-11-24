@@ -1,7 +1,8 @@
 import pytest
 
 from sigma_mem_harness import MemoryWriteConfig, SigmaConversationHarness
-from sigma_mem_harness.toy import TraceBackend
+from sigma_mem_harness.harness import CompactionConfig
+from sigma_mem_harness.toy import TraceBackend, TraceSummaryBackend
 
 
 def test_before_compact_sigma_only_writes_and_never_reads():
@@ -100,6 +101,75 @@ def test_repeated_compact_does_not_duplicate_readable_segments():
     segment_ids = [segment.segment_id for segment in harness.state.readable_segments]
     assert len(segment_ids) == len(set(segment_ids))
     assert segment_ids == ["turn-000001", "turn-000002", "turn-000003"]
+
+
+def test_summary_compaction_rebuilds_native_cache_with_summary_tokens():
+    backend = TraceBackend()
+    summary = TraceSummaryBackend()
+    harness = SigmaConversationHarness(
+        backend,
+        context_window_tokens=7,
+        compact_target_tokens=4,
+        compaction_config=CompactionConfig(
+            mode="summary",
+            summary_backend=summary,
+            summary_max_tokens=2,
+        ),
+    )
+
+    result = harness.run_turn([1, 2, 3], max_new_tokens=1)
+    assert result.compacted is False
+    result = harness.run_turn([4, 5, 6], max_new_tokens=1)
+
+    assert result.compacted is True
+    assert result.read_enabled is False
+    assert result.summary_tokens == 2
+    assert harness.state.native_token_ids[:2] == (700, 1)
+    assert harness.state.readable_memory is None
+    assert summary.calls
+
+
+def test_hybrid_compaction_keeps_summary_and_sigma_reader():
+    backend = TraceBackend()
+    summary = TraceSummaryBackend()
+    harness = SigmaConversationHarness(
+        backend,
+        context_window_tokens=7,
+        compact_target_tokens=4,
+        compaction_config=CompactionConfig(
+            mode="hybrid",
+            summary_backend=summary,
+            summary_max_tokens=2,
+        ),
+    )
+
+    harness.run_turn([1, 2, 3], max_new_tokens=1)
+    result = harness.run_turn([4, 5, 6], max_new_tokens=1)
+
+    assert result.compacted is True
+    assert result.read_enabled is True
+    assert result.summary_tokens == 2
+    assert harness.state.native_token_ids[:2] == (700, 1)
+    assert harness.sigma_readable_tokens > 0
+
+
+def test_recent_only_compaction_does_not_write_or_read_sigma_memory():
+    backend = TraceBackend()
+    harness = SigmaConversationHarness(
+        backend,
+        context_window_tokens=7,
+        compact_target_tokens=4,
+        compaction_config=CompactionConfig(mode="recent_only"),
+    )
+
+    harness.run_turn([1, 2, 3], max_new_tokens=1)
+    result = harness.run_turn([4, 5, 6], max_new_tokens=1)
+
+    assert result.compacted is True
+    assert result.read_enabled is False
+    assert harness.sigma_written_tokens == 0
+    assert harness.sigma_readable_tokens == 0
+    assert backend.write_calls == []
 
 
 def test_prompt_that_cannot_fit_is_rejected_before_model_calls():

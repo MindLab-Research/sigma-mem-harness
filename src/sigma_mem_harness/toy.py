@@ -64,4 +64,21 @@ class TraceBackend:
         return output
 
 
-__all__ = ["TraceBackend", "TraceCall"]
+class TraceSummaryBackend:
+    """Deterministic summary provider for compaction protocol tests."""
+
+    def __init__(self, *, marker: int = 700) -> None:
+        self.marker = marker
+        self.calls: list[tuple[tuple[int, ...], int]] = []
+
+    def summarize(self, token_ids: Sequence[int], *, max_new_tokens: int) -> Sequence[int]:
+        source = tuple(int(token) for token in token_ids)
+        self.calls.append((source, int(max_new_tokens)))
+        if max_new_tokens < 1:
+            return ()
+        # The marker makes it easy to assert that summary tokens entered the
+        # rebuilt native cache without pretending to perform semantic summarization.
+        return (self.marker, min(len(source), max_new_tokens - 1))
+
+
+__all__ = ["TraceBackend", "TraceCall", "TraceSummaryBackend"]

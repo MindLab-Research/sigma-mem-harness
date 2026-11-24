@@ -48,4 +48,16 @@ class SigmaBackend(Protocol):
         """Generate from native KV and optionally stream generated chunks."""
 
 
-__all__ = ["LogicalKVCache", "SigmaBackend"]
+class SummaryBackend(Protocol):
+    """Optional text-summary provider used by summary and hybrid compaction."""
+
+    def summarize(
+        self,
+        token_ids: Sequence[int],
+        *,
+        max_new_tokens: int,
+    ) -> Sequence[int]:
+        """Compress old context into summary token ids."""
+
+
+__all__ = ["LogicalKVCache", "SigmaBackend", "SummaryBackend"]

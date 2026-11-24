@@ -8,8 +8,10 @@ The harness deliberately keeps two paths separate:
   from the recent tail, and enables the Sigma read path for later turns.
 """
 
-from .backend import LogicalKVCache, SigmaBackend
+from .backend import LogicalKVCache, SigmaBackend, SummaryBackend
 from .harness import (
+    CompactionConfig,
+    CompactionMode,
     ConversationTurn,
     GenerationResult,
     HarnessEvent,
@@ -33,6 +35,8 @@ from .qwen_sglang import (
 
 __all__ = [
     "ConversationTurn",
+    "CompactionConfig",
+    "CompactionMode",
     "GenerationResult",
     "HarnessEvent",
     "HarnessState",
@@ -51,4 +55,5 @@ __all__ = [
     "SigmaBackend",
     "SigmaConversationHarness",
     "SigmaMemory",
+    "SummaryBackend",
 ]

@@ -134,6 +134,13 @@ the resulting summary tokens are inserted before the retained tail and are not
 written back into Sigma memory. Report summary generation latency and summary
 token count separately from writer and reader costs.
 
+The default summary provider is a separately loaded clean `Qwen/Qwen3-4B`
+model. It is independent of the tuned Sigma reader and the Qwen3-0.6B writer,
+and is loaded lazily at the first summary compact. Pin the same local model
+path, prompt, tokenizer, decoding settings, and `summary_max_tokens` across all
+summary and hybrid runs. A custom `SummaryBackend` can be injected for a
+different summarizer, but it must be treated as a separate experimental factor.
+
 ## Minimal integration gates
 
 Run both cases with the same reader checkpoint, tokenizer, decoding settings,

@@ -23,6 +23,12 @@ from .harness import (
     SigmaConversationHarness,
 )
 from .memory import SigmaMemory
+from .summary import (
+    DEFAULT_SUMMARY_MODEL,
+    DEFAULT_SUMMARY_PROMPT,
+    QwenSummaryBackend,
+    QwenSummaryConfig,
+)
 from .qwen_sglang import (
     QwenGenerationRecord,
     QwenSGLangBackend,
@@ -56,4 +62,8 @@ __all__ = [
     "SigmaConversationHarness",
     "SigmaMemory",
     "SummaryBackend",
+    "DEFAULT_SUMMARY_MODEL",
+    "DEFAULT_SUMMARY_PROMPT",
+    "QwenSummaryBackend",
+    "QwenSummaryConfig",
 ]

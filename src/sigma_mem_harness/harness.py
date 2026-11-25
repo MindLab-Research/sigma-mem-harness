@@ -7,6 +7,7 @@ from typing import Any, Callable, Literal, Mapping, Sequence
 
 from .backend import SigmaBackend, SummaryBackend
 from .memory import SigmaMemory
+from .summary import QwenSummaryBackend, QwenSummaryConfig
 
 MemoryWriteMode = Literal["turn", "token_interval", "segment"]
 CompactionMode = Literal["sigma", "summary", "hybrid", "recent_only"]
@@ -16,16 +17,27 @@ CompactionMode = Literal["sigma", "summary", "hybrid", "recent_only"]
 class CompactionConfig:
     """How old context is represented after native KV compaction.
 
-    ``sigma`` is the original design. ``summary`` and ``hybrid`` require a
-    summary provider; the provider receives the old summary (if any) followed
-    by newly evicted token ids and returns summary token ids. ``recent_only``
-    is the no-memory ablation.
+    ``sigma`` is the original design. ``summary`` and ``hybrid`` use the
+    independently configured text-summary provider; if none is supplied, a
+    lazy clean Qwen3-4B provider is created from ``summary_model_config``.
+    The provider receives the old summary (if any) followed by newly evicted
+    token ids and returns summary token ids. ``recent_only`` is the no-memory
+    ablation.
     """
 
     mode: CompactionMode = "sigma"
     summary_backend: SummaryBackend | None = None
+    summary_model_config: QwenSummaryConfig | None = None
     summary_max_tokens: int = 256
     write_sigma: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.mode in ("summary", "hybrid") and self.summary_backend is None:
+            object.__setattr__(
+                self,
+                "summary_backend",
+                QwenSummaryBackend(self.summary_model_config),
+            )
 
     def validate(self) -> None:
         if self.mode not in ("sigma", "summary", "hybrid", "recent_only"):
@@ -33,9 +45,7 @@ class CompactionConfig:
         if self.summary_max_tokens < 1:
             raise ValueError("summary_max_tokens must be positive")
         if self.mode in ("summary", "hybrid") and self.summary_backend is None:
-            raise ValueError(
-                f"summary_backend is required in {self.mode} compaction mode"
-            )
+            raise ValueError("summary_backend is required in summary or hybrid mode")
 
     @property
     def uses_sigma_read(self) -> bool:

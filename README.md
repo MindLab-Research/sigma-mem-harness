@@ -110,27 +110,49 @@ The available modes are:
 | `hybrid` | Exact native KV tail + summary tokens | Text summary + Sigma reader | Combined memory ablation |
 | `recent_only` | Exact native KV tail | Dropped | No-memory baseline |
 
-`summary` and `hybrid` require an injected `SummaryBackend`. The provider
-receives the previous summary tokens followed by newly evicted turn tokens and
-returns summary token ids. Summary tokens are placed before the retained native
-tail when the native cache is rebuilt; they are not recursively written into
-Sigma memory. The harness deliberately does not choose a summarization model,
-so experiments can compare different summarizers independently:
+`summary` and `hybrid` use a separate text-summary model. If no provider is
+injected, the harness lazily creates `QwenSummaryBackend` with the clean
+`Qwen/Qwen3-4B` model. This is an independent model: it is not the tuned Sigma
+reader checkpoint and it is not the Qwen3-0.6B Sigma writer. Weights are loaded
+only at the first compact that needs a summary. Set
+`SIGMA_SUMMARY_MODEL_PATH` or pass `QwenSummaryConfig` to select a local model
+path; `local_files_only=True` remains the default to prevent hidden downloads.
+
+The provider receives the previous summary tokens followed by newly evicted turn
+tokens and returns summary token ids. Summary tokens are placed before the
+retained native tail when the native cache is rebuilt; they are not recursively
+written into Sigma memory:
 
 ```python
-from sigma_mem_harness import CompactionConfig
+from sigma_mem_harness import CompactionConfig, QwenSummaryConfig
 
+# Default: clean Qwen3-4B, loaded lazily at first summary compact.
+summary_mode = CompactionConfig(mode="summary", summary_max_tokens=256)
+
+# Explicit local clean 4B model path.
 summary_mode = CompactionConfig(
     mode="summary",
-    summary_backend=my_summary_backend,
+    summary_model_config=QwenSummaryConfig(
+        model_path="/models/Qwen3-4B",
+        local_files_only=True,
+    ),
     summary_max_tokens=256,
 )
 
 hybrid_mode = CompactionConfig(
     mode="hybrid",
-    summary_backend=my_summary_backend,
+    summary_model_config=QwenSummaryConfig(model_path="/models/Qwen3-4B"),
     summary_max_tokens=256,
 )
+```
+
+For a custom summarizer, pass an object implementing `SummaryBackend` as
+`summary_backend`; this is useful when comparing a different model while
+keeping the harness policy fixed. Install the optional Transformers dependency
+for the built-in Qwen provider:
+
+```bash
+python -m pip install -e '.[test,summary]'
 ```
 
 The summary and hybrid modes are useful ablations because they distinguish the

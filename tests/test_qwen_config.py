@@ -1,10 +1,58 @@
 import json
 
 from sigma_mem_harness import (
+    CompactionConfig,
+    DEFAULT_SUMMARY_MODEL,
+    QwenSummaryBackend,
+    QwenSummaryConfig,
     QwenSGLangConfig,
     QwenSigmaReaderConfig,
     QwenSigmaWriterConfig,
 )
+
+
+def test_summary_mode_defaults_to_clean_qwen4b_without_loading_weights():
+    config = CompactionConfig(mode="summary")
+
+    assert isinstance(config.summary_backend, QwenSummaryBackend)
+    assert config.summary_backend.config.model_path == DEFAULT_SUMMARY_MODEL
+    assert config.summary_backend.is_loaded is False
+
+
+def test_qwen_summary_backend_returns_only_generated_ids():
+    import torch
+
+    class FakeTokenizer:
+        pad_token_id = 0
+        eos_token_id = 2
+
+        def decode(self, token_ids, *, skip_special_tokens):
+            assert skip_special_tokens is True
+            return "old conversation"
+
+        def apply_chat_template(self, messages, **kwargs):
+            assert messages[0]["content"].endswith("old conversation")
+            assert kwargs["add_generation_prompt"] is True
+            return torch.tensor([[11, 12]])
+
+    class FakeModel:
+        device = torch.device("cpu")
+
+        def eval(self):
+            return self
+
+        def generate(self, **kwargs):
+            assert kwargs["input_ids"].tolist() == [[11, 12]]
+            assert kwargs["max_new_tokens"] == 2
+            return torch.tensor([[11, 12, 21, 22]])
+
+    backend = QwenSummaryBackend(
+        QwenSummaryConfig(device="cpu"),
+        tokenizer=FakeTokenizer(),
+        model=FakeModel(),
+    )
+
+    assert backend.summarize([1, 2], max_new_tokens=2) == (21, 22)
 
 
 def test_reader_config_exports_spawned_rank_environment():
